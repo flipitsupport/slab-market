@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slab Market</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg1:#FDF4EC; --bg2:#F3EEFF;
+    --surface:#FFFFFF;
+    --ink:#211C33; --ink-soft:#7A7690;
+    --grad1:#FF6F91; --grad2:#FFA45C; --grad3:#7C6AFF;
+    --like:#17C978; --like-soft:#E4FBF0;
+    --pass:#FF5C7A; --pass-soft:#FFE7EC;
+    --amber:#FFB020; --amber-soft:#FFF3DD;
+    --violet:#7C6AFF; --violet-soft:#EFEBFF;
+    --line:rgba(33,28,51,0.08);
+    --shadow: 0 20px 45px -18px rgba(124,106,255,0.28), 0 4px 14px -6px rgba(33,28,51,0.08);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{
+    font-family:'Inter',sans-serif; color:var(--ink); overflow:hidden;
+    -webkit-user-select:none; user-select:none;
+    background: radial-gradient(circle at 15% 0%, var(--bg2), transparent 55%),
+                radial-gradient(circle at 85% 100%, var(--bg1), transparent 55%),
+                #FFFBF7;
+  }
+  #app{max-width:460px;margin:0 auto;height:100vh;display:flex;flex-direction:column;position:relative;}
+
+  /* ---------- top bar ---------- */
+  .topbar{padding:18px 20px 10px;flex-shrink:0;}
+  .topbar-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+  .wordmark{
+    font-family:'Poppins',sans-serif; font-weight:800; font-size:22px; letter-spacing:-0.5px;
+    background:linear-gradient(100deg, var(--grad3), var(--grad1) 60%, var(--grad2));
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .tabs{display:flex;gap:4px;background:rgba(124,106,255,0.07);border-radius:100px;padding:4px;}
+  .tab-btn{flex:1;font-family:'Poppins',sans-serif;font-size:12.5px;font-weight:600;padding:9px 8px;border-radius:100px;
+    border:none;background:transparent;color:var(--ink-soft);cursor:pointer;transition:all .2s ease;}
+  .tab-btn.active{background:var(--surface);color:var(--violet);box-shadow:0 4px 14px -6px rgba(124,106,255,0.35);}
+  .tab-btn .badge{display:inline-block;margin-left:5px;background:var(--pass);color:#fff;font-size:9.5px;font-weight:700;border-radius:20px;padding:1px 6px;}
+
+  /* ---------- marketplace feed ---------- */
+  #marketplace-view{flex:1;overflow-y:auto;padding:12px 16px 24px;display:none;}
+  #marketplace-view.active{display:block;}
+  .mp-intro{
+    font-family:'Inter',sans-serif;font-size:11.5px;color:var(--ink-soft);
+    background:var(--violet-soft);border-radius:12px;padding:10px 14px;margin-bottom:14px;line-height:1.5;
+  }
+  .mp-post{background:var(--surface);border-radius:20px;overflow:hidden;margin-bottom:18px;box-shadow:var(--shadow);}
+  .mp-post-head{display:flex;align-items:center;gap:10px;padding:12px 14px;}
+  .mp-avatar{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg, var(--grad3), var(--grad1));
+    display:flex;align-items:center;justify-content:center;color:#fff;font-family:'Poppins',sans-serif;font-weight:700;font-size:13px;flex-shrink:0;overflow:hidden;}
+  .mp-avatar img{width:100%;height:100%;object-fit:cover;}
+  .mp-seller{font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;color:var(--ink);flex:1;}
+  .mp-deal-badge{
+    background:linear-gradient(120deg, #FF5C7A, #FFA45C);color:#fff;font-family:'Poppins',sans-serif;
+    font-weight:700;font-size:10px;padding:5px 10px;border-radius:20px;white-space:nowrap;
+  }
+  .mp-img{width:100%;aspect-ratio:1/1;background:#fff;position:relative;}
+  .mp-img img{width:100%;height:100%;object-fit:contain;}
+  .mp-actions-row{display:flex;align-items:center;gap:14px;padding:12px 14px 0;}
+  .mp-icon-btn{background:none;border:none;cursor:pointer;color:var(--ink);display:flex;align-items:center;gap:5px;font-family:'Inter',sans-serif;font-size:12px;font-weight:600;padding:0;}
+  .mp-icon-btn.liked{color:var(--pass);}
+  .mp-icon-btn svg{width:22px;height:22px;}
+  .mp-body{padding:10px 14px 14px;}
+  .mp-name{font-family:'Poppins',sans-serif;font-weight:600;font-size:14px;color:var(--ink);margin-bottom:4px;}
+  .mp-price-row{display:flex;align-items:baseline;gap:10px;margin-bottom:8px;flex-wrap:wrap;}
+  .mp-price{font-family:'Poppins',sans-serif;font-weight:700;font-size:19px;color:var(--ink);}
+  .mp-comp{font-family:'Inter',sans-serif;font-size:11.5px;color:var(--ink-soft);}
+  .mp-comp b{color:var(--like);}
+  .mp-comp-proof{display:flex;align-items:center;gap:6px;font-family:'Inter',sans-serif;font-size:11px;
+    color:var(--violet);cursor:pointer;margin-bottom:10px;}
+  .mp-rating-row{display:flex;align-items:center;justify-content:space-between;padding-top:10px;border-top:1px solid var(--line);}
+  .mp-stars{display:flex;gap:3px;}
+  .mp-star{width:20px;height:20px;cursor:pointer;color:var(--line);}
+  .mp-star.filled{color:var(--amber);}
+  .mp-rating-label{font-family:'Inter',sans-serif;font-size:11px;color:var(--ink-soft);}
+  .empty-marketplace{text-align:center;color:var(--ink-soft);padding:80px 20px;font-size:13.5px;}
+  .empty-marketplace .big{font-family:'Poppins',sans-serif;font-weight:600;font-size:17px;color:var(--ink);margin-bottom:6px;}
+
+  /* ---------- saved ---------- */
+  #saved-view{flex:1;overflow-y:auto;padding:10px 20px 20px;display:none;}
+  #saved-view.active{display:block;}
+  .saved-row{display:flex;gap:13px;align-items:center;background:var(--surface);
+    border-radius:18px;padding:11px;margin-bottom:11px;cursor:pointer;box-shadow:0 6px 18px -10px rgba(33,28,51,0.15);}
+  .saved-thumb{width:52px;height:52px;border-radius:13px;flex-shrink:0;background:#fff;overflow:hidden;border:1px solid var(--line);}
+  .saved-thumb img{width:100%;height:100%;object-fit:contain;}
+  .saved-meta{flex:1;min-width:0;}
+  .saved-meta .nm{font-family:'Poppins',sans-serif;font-size:13.5px;font-weight:600;line-height:1.3;color:var(--ink);
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .saved-meta .pr{font-family:'Inter',sans-serif;font-size:11.5px;color:var(--violet);font-weight:600;margin-top:4px;}
+  .empty-saved{text-align:center;color:var(--ink-soft);padding:60px 20px;font-size:13.5px;}
+
+  /* ---------- profile ---------- */
+  #profile-view{flex:1;overflow-y:auto;padding:10px 20px 24px;display:none;}
+  #profile-view.active{display:block;}
+  .profile-header{display:flex;align-items:center;gap:14px;padding:10px 4px 18px;}
+  .avatar{
+    width:56px;height:56px;border-radius:50%;flex-shrink:0;
+    background:linear-gradient(135deg, var(--grad3), var(--grad1) 60%, var(--grad2));
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Poppins',sans-serif;font-weight:700;color:#fff;font-size:19px;
+    position:relative; overflow:hidden; cursor:pointer;
+  }
+  .avatar img{ width:100%; height:100%; object-fit:cover; }
+  .avatar input{ position:absolute; inset:0; opacity:0; cursor:pointer; }
+  .avatar-edit-badge{
+    position:absolute; bottom:-1px; right:-1px; width:20px; height:20px; border-radius:50%;
+    background:var(--violet); border:2px solid var(--surface);
+    display:flex; align-items:center; justify-content:center; pointer-events:none;
+  }
+  .profile-bio{font-family:'Inter',sans-serif;font-size:12.5px;color:var(--ink-soft);line-height:1.55;padding:0 4px 16px;white-space:pre-wrap;}
+  .add-bio-btn{background:none;border:none;color:var(--violet);font-family:'Inter',sans-serif;font-size:12px;font-weight:600;cursor:pointer;padding:0 4px 16px;display:block;}
+  .profile-name-row{flex:1;min-width:0;}
+  .profile-name{font-family:'Poppins',sans-serif;font-weight:700;font-size:17px;color:var(--ink);display:flex;align-items:center;gap:8px;}
+  .edit-name-btn{background:none;border:none;color:var(--ink-soft);cursor:pointer;padding:2px;}
+  .profile-stats{display:flex;gap:10px;margin-top:5px;}
+  .stat-pill{font-family:'Inter',sans-serif;font-size:11px;color:var(--ink-soft);background:var(--violet-soft);padding:3px 9px;border-radius:20px;}
+  .stat-pill b{color:var(--violet);}
+
+  .entry-btn{
+    width:100%; display:flex; align-items:center; justify-content:space-between;
+    background:var(--surface); border:1px solid var(--line); color:var(--ink);
+    font-family:'Poppins',sans-serif; font-weight:600; font-size:13.5px;
+    padding:13px 16px; border-radius:14px; cursor:pointer; margin-bottom:12px;
+    box-shadow:0 4px 14px -8px rgba(33,28,51,0.15);
+  }
+  .entry-badge{ background:var(--pass); color:#fff; font-size:10px; font-weight:700; border-radius:20px; padding:2px 8px; }
+  .list-card-btn{
+    width:100%;background:linear-gradient(120deg, var(--grad3), var(--grad1));color:#fff;border:none;
+    font-family:'Poppins',sans-serif;font-weight:600;font-size:14px;padding:14px;border-radius:16px;
+    cursor:pointer;margin-bottom:20px;display:flex;align-items:center;justify-content:center;gap:8px;
+    box-shadow:0 10px 24px -8px rgba(255,111,145,0.45);
+  }
+  .section-label{font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;color:var(--ink-soft);margin-bottom:10px;}
+  .listings-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .mini-card{background:var(--surface);border-radius:18px;overflow:hidden;box-shadow:0 6px 18px -10px rgba(33,28,51,0.15);position:relative;}
+  .mini-card .mc-art{aspect-ratio:5/7;background:#fff;display:flex;align-items:center;justify-content:center;position:relative;}
+  .mini-card .mc-art img{width:100%;height:100%;object-fit:contain;}
+  .mini-card .mc-info{padding:9px 11px 11px;}
+  .mini-card .mc-name{font-family:'Poppins',sans-serif;font-size:12.5px;font-weight:600;line-height:1.3;color:var(--ink);
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .mini-card .mc-price{font-family:'Inter',sans-serif;font-size:11.5px;color:var(--violet);margin-top:2px;}
+  .mini-card .mc-delete{
+    position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:50%;
+    background:rgba(255,255,255,0.9);border:none;color:var(--pass);display:flex;align-items:center;justify-content:center;
+    cursor:pointer;box-shadow:0 2px 8px rgba(33,28,51,0.15);z-index:2;
+  }
+  .empty-listings{text-align:center;color:var(--ink-soft);padding:30px 10px;font-size:13px;}
+
+  /* ---------- shared side panel (messages, collection) ---------- */
+  .side-panel{
+    position:absolute; inset:0; background:var(--bg1); z-index:40;
+    display:flex; flex-direction:column;
+    transform:translateX(100%); transition:transform .28s cubic-bezier(.22,1,.36,1);
+  }
+  .side-panel.open{ transform:translateX(0); }
+  .panel-head{ display:flex; align-items:center; gap:12px; padding:16px 18px; border-bottom:1px solid var(--line); flex-shrink:0; background:var(--surface); }
+  .panel-title{ font-family:'Poppins',sans-serif; font-weight:700; font-size:16px; }
+  .back-btn{
+    width:32px; height:32px; border-radius:50%; flex-shrink:0; border:1px solid var(--line);
+    background:var(--bg2); color:var(--ink); cursor:pointer; display:flex; align-items:center; justify-content:center;
+  }
+  .panel-scroll{ flex:1; overflow-y:auto; padding:14px 18px 20px; }
+
+  /* messages */
+  .thread-row{display:flex;gap:12px;align-items:center;background:var(--surface);border-radius:16px;
+    padding:12px;margin-bottom:10px;cursor:pointer;box-shadow:0 4px 14px -8px rgba(33,28,51,0.15);}
+  .thread-avatar{width:42px;height:42px;border-radius:50%;flex-shrink:0;
+    background:linear-gradient(135deg, var(--grad3), var(--grad1));
+    display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-family:'Poppins',sans-serif;}
+  .thread-meta{flex:1;min-width:0;}
+  .thread-meta .tm-name{font-family:'Poppins',sans-serif;font-weight:600;font-size:13.5px;color:var(--ink);}
+  .thread-meta .tm-listing{font-size:10.5px;color:var(--violet);margin-top:1px;}
+  .thread-meta .tm-last{font-size:11.5px;color:var(--ink-soft);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .empty-threads{text-align:center;color:var(--ink-soft);padding:60px 20px;font-size:13.5px;}
+  .msg-chat{flex:1;display:flex;flex-direction:column;min-height:0;}
+  .msg-chat-body{flex:1;overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:10px;}
+  .msg-bubble{max-width:78%;padding:10px 13px;border-radius:16px;font-size:13.5px;line-height:1.4;font-family:'Inter',sans-serif;}
+  .msg-bubble.me{align-self:flex-end;background:linear-gradient(120deg, var(--grad3), var(--grad1));color:#fff;border-bottom-right-radius:5px;}
+  .msg-bubble.them{align-self:flex-start;background:var(--surface);color:var(--ink);border-bottom-left-radius:5px;box-shadow:0 2px 8px -4px rgba(33,28,51,0.1);}
+  .msg-bubble.system{align-self:center;background:transparent;color:var(--ink-soft);font-size:11px;text-align:center;}
+  .msg-input-row{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--line);background:var(--surface);flex-shrink:0;}
+  .msg-input-row input{flex:1;background:var(--bg2);border:1px solid var(--line);color:var(--ink);
+    border-radius:100px;padding:11px 16px;font-size:13.5px;font-family:'Inter',sans-serif;}
+  .msg-input-row input:focus{outline:none;border-color:var(--violet);}
+  .msg-send{width:40px;height:40px;border-radius:50%;flex-shrink:0;border:none;cursor:pointer;
+    background:linear-gradient(120deg, var(--grad3), var(--grad1));color:#fff;display:flex;align-items:center;justify-content:center;}
+
+  /* collection */
+  .empty-collection{text-align:center;color:var(--ink-soft);padding:30px 10px;font-size:13px;}
+
+  /* ---------- sheets ---------- */
+  .sheet-backdrop{position:absolute;inset:0;background:rgba(33,28,51,0.35);opacity:0;pointer-events:none;transition:opacity .25s ease;z-index:20;}
+  .sheet-backdrop.open{opacity:1;pointer-events:auto;}
+  .sheet{position:absolute;left:0;right:0;bottom:0;background:var(--surface);border-radius:26px 26px 0 0;
+    z-index:21; padding:20px 22px 24px;transform:translateY(100%);transition:transform .3s cubic-bezier(.22,1,.36,1);
+    max-height:85vh;overflow-y:auto;box-shadow:0 -10px 40px rgba(33,28,51,0.15);}
+  .sheet.open{transform:translateY(0);}
+  .sheet-handle{width:38px;height:5px;background:var(--line);border-radius:10px;margin:0 auto 16px;}
+  .sheet h3{font-family:'Poppins',sans-serif;font-weight:600;margin:0 0 3px;font-size:17px;line-height:1.35;}
+  .sheet .sub{color:var(--ink-soft);font-size:12.5px;margin-bottom:16px;}
+  .send-btn{width:100%;background:linear-gradient(120deg, var(--like), #0FAF63);color:#fff;border:none;
+    font-family:'Poppins',sans-serif;font-weight:600;font-size:15px;letter-spacing:0.2px;
+    padding:15px;border-radius:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;
+    box-shadow:0 10px 24px -8px rgba(23,201,120,0.5);margin-top:6px;}
+
+  .photo-drop{
+    border:2px dashed var(--line); border-radius:16px; height:140px;
+    display:flex; align-items:center; justify-content:center; flex-direction:column; gap:6px;
+    color:var(--ink-soft); font-size:12px; cursor:pointer; margin-bottom:14px; overflow:hidden; position:relative;
+    font-family:'Inter',sans-serif;
+  }
+  .photo-drop img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+  .photo-drop input{position:absolute;inset:0;opacity:0;cursor:pointer;}
+  .photo-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+  .photo-slot{aspect-ratio:5/7;border-radius:12px;overflow:hidden;position:relative;background:var(--bg2);
+    border:1.5px dashed var(--line);display:flex;align-items:center;justify-content:center;}
+  .photo-slot img{width:100%;height:100%;object-fit:cover;}
+  .photo-slot.filled{border-style:solid;border-color:var(--line);}
+  .photo-slot input{position:absolute;inset:0;opacity:0;cursor:pointer;}
+  .photo-slot .add-icon{color:var(--ink-soft);}
+  .photo-slot .remove-photo{position:absolute;top:4px;right:4px;width:20px;height:20px;border-radius:50%;
+    background:rgba(255,255,255,0.92);border:none;color:var(--pass);display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2;}
+  .photo-badge{position:absolute;bottom:9px;right:9px;background:rgba(33,28,51,0.65);color:#fff;
+    font-family:'Inter',sans-serif;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;}
+
+  .form-field{margin-bottom:12px;}
+  .form-field label{font-family:'Inter',sans-serif;font-size:11px;color:var(--ink-soft);display:block;margin-bottom:6px;font-weight:600;}
+  .form-field input, .form-field select{width:100%;background:var(--bg2);border:1px solid var(--line);color:var(--ink);border-radius:12px;
+    padding:11px 13px;font-family:'Inter',sans-serif;font-size:13.5px;}
+  .form-field input:focus, .form-field select:focus{outline:none;border-color:var(--violet);}
+  .form-field textarea{width:100%;background:var(--bg2);border:1px solid var(--line);color:var(--ink);border-radius:12px;
+    padding:11px 13px;font-family:'Inter',sans-serif;font-size:13.5px;resize:vertical;}
+  .form-field textarea:focus{outline:none;border-color:var(--violet);}
+  .field-row{display:flex;gap:10px;}
+  .field-row > div{flex:1;}
+  .no-fee-note{font-family:'Inter',sans-serif;font-size:11px;color:var(--like);background:var(--like-soft);
+    padding:8px 12px;border-radius:12px;margin-bottom:14px;display:inline-block;font-weight:600;}
+
+  .comp-proof-box{background:var(--amber-soft);border-radius:16px;padding:14px;margin:14px 0;border:1.5px solid var(--amber);}
+  .comp-proof-head{font-family:'Poppins',sans-serif;font-weight:700;font-size:13px;color:#8a5a00;display:flex;align-items:center;gap:8px;}
+  .required-tag{background:var(--pass);color:#fff;font-size:9px;font-weight:700;padding:2px 8px;border-radius:20px;font-family:'Inter',sans-serif;}
+  .comp-proof-sub{font-family:'Inter',sans-serif;font-size:11px;color:#8a6a2a;line-height:1.5;margin:6px 0 10px;}
+
+  .comp-proof-modal-backdrop{position:absolute;inset:0;background:rgba(33,28,51,0.7);z-index:45;
+    display:none;align-items:center;justify-content:center;padding:30px;}
+  .comp-proof-modal-backdrop.open{display:flex;}
+  .comp-proof-modal{background:#fff;border-radius:16px;overflow:hidden;max-width:100%;max-height:80vh;}
+  .comp-proof-modal img{width:100%;height:100%;object-fit:contain;display:block;}
+
+  .stage-msg{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:var(--ink-soft);gap:10px;padding:30px;}
+  .stage-msg .big{font-family:'Poppins',sans-serif;font-weight:600;font-size:19px;color:var(--ink);}
+  .spinner{width:28px;height:28px;border:3px solid var(--violet-soft);border-top-color:var(--violet);border-radius:50%;animation:spin 0.8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div class="topbar">
+    <div class="topbar-row">
+      <div class="wordmark">Slab Market</div>
+    </div>
+    <div class="tabs">
+      <button class="tab-btn active" id="tab-market" onclick="showView('market')">Marketplace</button>
+      <button class="tab-btn" id="tab-saved" onclick="showView('saved')">Saved<span class="badge" id="saved-badge" style="display:none;">0</span></button>
+      <button class="tab-btn" id="tab-profile" onclick="showView('profile')">Profile</button>
+    </div>
+  </div>
+
+  <div id="marketplace-view"></div>
+  <div id="saved-view"></div>
+  <div id="profile-view"></div>
+
+  <div class="comp-proof-modal-backdrop" id="comp-proof-modal-backdrop" onclick="closeCompProofModal()">
+    <div class="comp-proof-modal"><img id="comp-proof-modal-img" src=""></div>
+  </div>
+
+  <!-- List a card -->
+  <div class="sheet-backdrop" id="list-sheet-backdrop" onclick="closeListSheet()"></div>
+  <div class="sheet" id="list-sheet">
+    <div class="sheet-handle"></div>
+    <h3>List a card</h3>
+    <div class="sub">Requires comp proof — this goes straight into the Marketplace feed.</div>
+    <div class="no-fee-note">$0 · no fees except card processing</div>
+
+    <div class="form-field">
+      <label>Photos (up to 4)</label>
+      <div class="photo-grid" id="photo-grid"></div>
+    </div>
+
+    <div class="form-field"><label>Title</label><input type="text" id="nf-name" placeholder="e.g. 2024 Prestige Chrome M. Alvarez Rookie"></div>
+    <div class="field-row">
+      <div class="form-field"><label>Sport</label>
+        <select id="nf-sport"><option>Baseball</option><option>Basketball</option><option>Hockey</option><option>Football</option></select>
+      </div>
+      <div class="form-field"><label>Year</label><input type="number" id="nf-year" placeholder="2024" value="2024"></div>
+    </div>
+    <div class="form-field"><label>Team</label><input type="text" id="nf-team" placeholder="e.g. Dodgers"></div>
+
+    <div class="field-row">
+      <div class="form-field"><label>Condition</label>
+        <select id="nf-condition" onchange="toggleGradeField()">
+          <option>Raw</option><option>PSA</option><option>BGS</option><option>SGC</option><option>CSG</option><option>Other graded</option>
+        </select>
+      </div>
+      <div class="form-field" id="nf-grade-wrap" style="display:none;">
+        <label>Grade</label><input type="text" id="nf-grade" placeholder="e.g. 9.5">
+      </div>
+    </div>
+
+    <div class="form-field"><label>Details</label>
+      <textarea id="nf-details" rows="3" placeholder="Centering, edges/corners, any flaws, extras included..."></textarea>
+    </div>
+
+    <div class="form-field"><label>Asking price ($)</label><input type="number" id="nf-price" placeholder="45"></div>
+
+    <div class="comp-proof-box">
+      <div class="comp-proof-head">📸 Comp proof <span class="required-tag">required</span></div>
+      <div class="comp-proof-sub">Upload a screenshot of what this card actually sold for (eBay sold listing, CardLadder, etc). Other collectors will rate whether it looks legit — listings priced below their comp get pushed to the top of the feed.</div>
+      <label class="photo-drop" id="comp-photo-drop">
+        <span>Tap to add comp screenshot</span>
+        <input type="file" accept="image/*" onchange="handleCompScreenshot(event)">
+      </label>
+      <div class="form-field"><label>What did it sell for? ($)</label><input type="number" id="nf-comp-price" placeholder="100"></div>
+    </div>
+
+    <button class="send-btn" onclick="submitNewListing()">List this card</button>
+  </div>
+
+  <!-- Add to collection -->
+  <div class="sheet-backdrop" id="collection-add-backdrop" onclick="closeCollectionAddSheet()"></div>
+  <div class="sheet" id="collection-add-sheet">
+    <div class="sheet-handle"></div>
+    <h3>Add to collection</h3>
+    <div class="sub">Cards you own — separate from Marketplace listings.</div>
+    <div class="form-field">
+      <label>Photos (up to 4)</label>
+      <div class="photo-grid" id="collection-photo-grid"></div>
+    </div>
+    <div class="form-field"><label>Title</label><input type="text" id="cf-name" placeholder="e.g. 2024 Prestige Chrome M. Alvarez Rookie"></div>
+    <div class="field-row">
+      <div class="form-field"><label>Sport</label>
+        <select id="cf-sport"><option>Baseball</option><option>Basketball</option><option>Hockey</option><option>Football</option></select>
+      </div>
+      <div class="form-field"><label>Year</label><input type="number" id="cf-year" placeholder="2024" value="2024"></div>
+    </div>
+    <div class="form-field"><label>Team</label><input type="text" id="cf-team" placeholder="e.g. Dodgers"></div>
+    <div class="field-row">
+      <div class="form-field"><label>Condition</label>
+        <select id="cf-condition" onchange="toggleCollectionGradeField()">
+          <option>Raw</option><option>PSA</option><option>BGS</option><option>SGC</option><option>CSG</option><option>Other graded</option>
+        </select>
+      </div>
+      <div class="form-field" id="cf-grade-wrap" style="display:none;">
+        <label>Grade</label><input type="text" id="cf-grade" placeholder="e.g. 9.5">
+      </div>
+    </div>
+    <div class="form-field"><label>Price you paid ($)</label><input type="number" id="cf-price" placeholder="45"></div>
+    <div class="form-field"><label>Details</label>
+      <textarea id="cf-details" rows="3" placeholder="Where you got it, any notes..."></textarea>
+    </div>
+    <button class="send-btn" onclick="submitCollectionItem()">Add to collection</button>
+  </div>
+
+  <!-- Edit profile -->
+  <div class="sheet-backdrop" id="edit-profile-backdrop" onclick="closeEditProfileSheet()"></div>
+  <div class="sheet" id="edit-profile-sheet">
+    <div class="sheet-handle"></div>
+    <h3>Edit profile</h3>
+    <div class="sub">Saved on this device's server, visible on your profile.</div>
+    <div class="form-field"><label>Display name</label><input type="text" id="ep-name" placeholder="Collector"></div>
+    <div class="form-field"><label>Bio</label><textarea id="ep-bio" rows="3" placeholder="What do you collect? What are you looking for?"></textarea></div>
+    <button class="send-btn" onclick="saveProfileEdits()">Save profile</button>
+  </div>
+
+  <!-- Messages -->
+  <div id="messages-panel" class="side-panel">
+    <div class="panel-head">
+      <button class="back-btn" id="msg-back-btn" onclick="messagesBack()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="panel-title" id="msg-panel-title">Messages</div>
+    </div>
+    <div id="thread-list-view" class="panel-scroll"></div>
+    <div id="thread-chat-view" class="msg-chat" style="display:none;">
+      <div class="msg-chat-body" id="msg-chat-body"></div>
+      <div class="msg-input-row">
+        <input type="text" id="msg-input" placeholder="Message...">
+        <button class="msg-send" onclick="sendThreadMessage()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 20l16-8L4 4v6l10 2-10 2v6z" fill="currentColor"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Collection -->
+  <div id="collection-panel" class="side-panel">
+    <div class="panel-head">
+      <button class="back-btn" onclick="closeCollectionPanel()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="panel-title">My Collection</div>
+    </div>
+    <div class="panel-scroll">
+      <button class="list-card-btn" onclick="openCollectionAddSheet()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+        Add to collection
+      </button>
+      <div id="collection-grid"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const PROXY_BASE = 'http://localhost:3001';
+
+/* ---------------- state ---------------- */
+let profile = { displayName: 'Collector' };
+let listings = [];
+let saved = [];
+let collection = [];
+let threads = [];
+let activeThreadId = null;
+let pendingNewPhotos = [];
+let pendingCompScreenshot = null;
+let pendingCollectionPhotos = [];
+
+/* ---------------- init ---------------- */
+async function loadProfile(){
+  try{ const res = await fetch(`${PROXY_BASE}/api/profile`); profile = await res.json(); } catch(e){}
+}
+async function loadListings(){
+  try{ const res = await fetch(`${PROXY_BASE}/api/listings`); listings = await res.json(); } catch(e){ listings = []; }
+}
+async function loadCollection(){
+  try{ const res = await fetch(`${PROXY_BASE}/api/collection`); collection = await res.json(); } catch(e){ collection = []; }
+}
+async function loadMessages(){
+  try{ const res = await fetch(`${PROXY_BASE}/api/messages`); threads = await res.json(); } catch(e){ threads = []; }
+  const badge = document.getElementById('msg-count-badge');
+  if(badge){ badge.style.display = threads.length ? 'inline-block' : 'none'; badge.textContent = threads.length; }
+}
+
+function initials(name){
+  return (name || 'C').trim().split(/\s+/).slice(0,2).map(w => w[0].toUpperCase()).join('');
+}
+
+/* ---------------- tabs ---------------- */
+function showView(view){
+  document.getElementById('tab-market').classList.toggle('active', view==='market');
+  document.getElementById('tab-saved').classList.toggle('active', view==='saved');
+  document.getElementById('tab-profile').classList.toggle('active', view==='profile');
+  document.getElementById('marketplace-view').classList.toggle('active', view==='market');
+  document.getElementById('saved-view').classList.toggle('active', view==='saved');
+  document.getElementById('profile-view').classList.toggle('active', view==='profile');
+  if(view==='market') renderMarketplaceFeed();
+  if(view==='saved') renderSavedList();
+  if(view==='profile') renderProfile();
+}
+
+/* ---------------- Marketplace feed ----------------
+   Ranking rule: listings priced below their claimed comp are pushed
+   toward the top, ranked by how far below comp they are. The comp is
+   self-reported by the seller with a screenshot as evidence — there's no
+   automated way to verify a sold price without a licensed sold-comps
+   API, so the star rating is the community's way of flagging fake or
+   inflated comps instead. */
+function avgRating(listing){
+  const ratings = listing.ratings || [];
+  if(ratings.length === 0) return null;
+  return ratings.reduce((sum, r) => sum + r.stars, 0) / ratings.length;
+}
+
+function renderMarketplaceFeed(){
+  const el = document.getElementById('marketplace-view');
+  const ranked = [...listings].sort((a, b) => (b.compPrice - b.price) - (a.compPrice - a.price));
+
+  if(ranked.length === 0){
+    el.innerHTML = `
+      <div class="mp-intro">Listings priced below their comp get pushed to the top here.</div>
+      <div class="empty-marketplace">
+        <div class="big">Nothing listed yet</div>
+        List a card from your Profile to see it in the feed.
+      </div>`;
+    return;
+  }
+
+  el.innerHTML = `
+    <div class="mp-intro">🔥 Ranked by how far below the seller's comp they're priced — rate the screenshot proof to help keep this honest.</div>
+    ${ranked.map(item => renderMarketplacePost(item)).join('')}
+  `;
+}
+
+function renderMarketplacePost(item){
+  const photos = item.photos && item.photos.length ? item.photos : (item.photo ? [item.photo] : []);
+  const rating = avgRating(item);
+  const pctBelow = Math.round((1 - item.price / item.compPrice) * 100);
+  const dealBadge = pctBelow > 0 ? `<div class="mp-deal-badge">🔥 ${pctBelow}% below comp</div>` : '';
+  const isLiked = saved.some(s => s.id === item.id);
+  const isOwn = item.sellerName === (profile.displayName || 'Collector');
+
+  const starsHtml = [1,2,3,4,5].map(n =>
+    `<svg class="mp-star ${rating && n <= Math.round(rating) ? 'filled' : ''}" onclick="rateListing('${item.id}', ${n})" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>`
+  ).join('');
+
+  return `
+    <div class="mp-post">
+      <div class="mp-post-head">
+        <div class="mp-avatar">${profile.photo && isOwn ? `<img src="${profile.photo}">` : initials(item.sellerName)}</div>
+        <div class="mp-seller">${item.sellerName}</div>
+        ${dealBadge}
+      </div>
+      <div class="mp-img">${photos[0] ? `<img src="${photos[0]}">` : ''}</div>
+      <div class="mp-actions-row">
+        <button class="mp-icon-btn ${isLiked ? 'liked' : ''}" onclick="toggleSaveListing('${item.id}')">
+          <svg viewBox="0 0 24 24" fill="${isLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M12 21s-7.5-4.6-10-9.3C.4 8 2 4.5 5.6 4c2-.3 3.7.6 4.9 2.2C11.7 4.6 13.4 3.7 15.4 4c3.6.5 5.2 4 3.6 7.7C16.5 16.4 12 21 12 21z"/></svg>
+          ${isLiked ? 'Saved' : 'Save'}
+        </button>
+        ${!isOwn ? `<button class="mp-icon-btn" onclick="messageAboutListing('${item.id}')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+          Message
+        </button>` : `<span style="font-family:'Inter',sans-serif;font-size:11px;color:var(--ink-soft);">Your listing</span>`}
+      </div>
+      <div class="mp-body">
+        <div class="mp-name">${item.name}</div>
+        <div class="mp-price-row">
+          <div class="mp-price">$${Number(item.price).toFixed(2)}</div>
+          <div class="mp-comp">sold comp: <b>$${Number(item.compPrice).toFixed(2)}</b></div>
+        </div>
+        ${item.compScreenshot ? `<div class="mp-comp-proof" onclick="openCompProofModal('${item.id}')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          View comp screenshot
+        </div>` : ''}
+        <div class="mp-rating-row">
+          <div class="mp-stars">${starsHtml}</div>
+          <div class="mp-rating-label">${rating ? `${rating.toFixed(1)} (${item.ratings.length})` : 'Rate this comp'}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function rateListing(id, stars){
+  try{
+    const res = await fetch(`${PROXY_BASE}/api/listings/${id}/rate`, {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ stars }),
+    });
+    const updated = await res.json();
+    const idx = listings.findIndex(l => l.id === id);
+    if(idx >= 0) listings[idx] = updated;
+    renderMarketplaceFeed();
+  } catch(e){
+    alert("Couldn't reach your local server — make sure npm start is running.");
+  }
+}
+
+function openCompProofModal(id){
+  const item = listings.find(l => l.id === id);
+  if(!item || !item.compScreenshot) return;
+  document.getElementById('comp-proof-modal-img').src = item.compScreenshot;
+  document.getElementById('comp-proof-modal-backdrop').classList.add('open');
+}
+function closeCompProofModal(){
+  document.getElementById('comp-proof-modal-backdrop').classList.remove('open');
+}
+
+/* ---------------- save / saved tab ---------------- */
+function toggleSaveListing(id){
+  const item = listings.find(l => l.id === id);
+  if(!item) return;
+  const idx = saved.findIndex(s => s.id === id);
+  if(idx >= 0) saved.splice(idx, 1); else saved.unshift(item);
+  renderMarketplaceFeed();
+  renderSavedBadge();
+}
+function renderSavedBadge(){
+  const b = document.getElementById('saved-badge');
+  b.style.display = saved.length ? 'inline-block' : 'none';
+  b.textContent = saved.length;
+}
+function renderSavedList(){
+  const c = document.getElementById('saved-view');
+  if(saved.length === 0){ c.innerHTML = `<div class="empty-saved">Nothing saved yet. Tap the heart on a listing in Marketplace to save it here.</div>`; return; }
+  c.innerHTML = saved.map(item => {
+    const photos = item.photos && item.photos.length ? item.photos : (item.photo ? [item.photo] : []);
+    return `<div class="saved-row" onclick="toggleSaveListing('${item.id}'); renderSavedList();">
+      <div class="saved-thumb">${photos[0] ? `<img src="${photos[0]}">` : ''}</div>
+      <div class="saved-meta"><div class="nm">${item.name}</div><div class="pr">$${Number(item.price).toFixed(2)} · @${item.sellerName}</div></div>
+    </div>`;
+  }).join('');
+}
+
+/* ---------------- messaging from a listing ---------------- */
+function messageAboutListing(id){
+  const item = listings.find(l => l.id === id);
+  if(!item) return;
+  startOrOpenThread(item.sellerName, item.name, item.id, `Hi! I'm interested in "${item.name}" — is it still available?`);
+}
+
+/* ---------------- profile ---------------- */
+function renderProfile(){
+  const el = document.getElementById('profile-view');
+  const myListings = listings.filter(l => l.sellerName === (profile.displayName || 'Collector'));
+  el.innerHTML = `
+    <div class="profile-header">
+      <label class="avatar" style="${profile.photo ? 'background:none;' : ''}">
+        ${profile.photo ? `<img src="${profile.photo}">` : initials(profile.displayName)}
+        <div class="avatar-edit-badge">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" stroke="white" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.5" stroke="white" stroke-width="2"/></svg>
+        </div>
+        <input type="file" accept="image/*" onchange="handleAvatarPhoto(event)">
+      </label>
+      <div class="profile-name-row">
+        <div class="profile-name">
+          ${profile.displayName || 'Collector'}
+          <button class="edit-name-btn" onclick="openEditProfileSheet()" title="Edit profile">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M18.5 2.5a2.1 2.1 0 013 3L12 15l-4 1 1-4z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+        <div class="profile-stats">
+          <div class="stat-pill"><b>${myListings.length}</b> listed</div>
+          <div class="stat-pill"><b>${collection.length}</b> in collection</div>
+        </div>
+      </div>
+    </div>
+    ${profile.bio ? `<div class="profile-bio">${profile.bio}</div>` : `<button class="add-bio-btn" onclick="openEditProfileSheet()">+ Add a bio</button>`}
+    <button class="entry-btn" onclick="openCollectionPanel()">
+      <span>📦 My Collection</span>
+      <span class="entry-badge" id="collection-count-badge" style="display:${collection.length ? 'inline-block' : 'none'};">${collection.length}</span>
+    </button>
+    <button class="entry-btn" onclick="openMessagesPanel()">
+      <span>💬 Messages</span>
+      <span class="entry-badge" id="msg-count-badge" style="display:${threads.length ? 'inline-block' : 'none'};">${threads.length}</span>
+    </button>
+    <button class="list-card-btn" onclick="openListSheet()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+      List a new card
+    </button>
+    <div class="section-label">Your listings</div>
+    <div id="my-listings-grid" class="listings-grid"></div>
+  `;
+  renderMyListingsGrid(myListings);
+}
+
+function renderMyListingsGrid(myListings){
+  const grid = document.getElementById('my-listings-grid');
+  if(!grid) return;
+  if(myListings.length === 0){
+    grid.innerHTML = `<div class="empty-listings" style="grid-column:1/-1;">Nothing listed yet — tap "List a new card" above.</div>`;
+    return;
+  }
+  grid.innerHTML = myListings.map(item => {
+    const photos = item.photos && item.photos.length ? item.photos : (item.photo ? [item.photo] : []);
+    return `
+    <div class="mini-card">
+      <button class="mc-delete" onclick="deleteListing('${item.id}')" title="Remove">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="mc-art">${photos[0] ? `<img src="${photos[0]}">` : ''}</div>
+      <div class="mc-info">
+        <div class="mc-name">${item.name}</div>
+        <div class="mc-price">$${Number(item.price).toFixed(2)} · comp $${Number(item.compPrice).toFixed(2)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+async function deleteListing(id){
+  listings = listings.filter(l => l.id !== id);
+  saved = saved.filter(s => s.id !== id);
+  renderProfile();
+  try{ await fetch(`${PROXY_BASE}/api/listings/${id}`, { method:'DELETE' }); } catch(e){}
+}
+
+let pendingAvatarPhoto = null;
+function handleAvatarPhoto(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    pendingAvatarPhoto = ev.target.result;
+    profile.photo = pendingAvatarPhoto;
+    renderProfile();
+    saveProfileToServer({ photo: profile.photo });
+  };
+  reader.readAsDataURL(file);
+}
+function openEditProfileSheet(){
+  document.getElementById('ep-name').value = profile.displayName || '';
+  document.getElementById('ep-bio').value = profile.bio || '';
+  document.getElementById('edit-profile-backdrop').classList.add('open');
+  document.getElementById('edit-profile-sheet').classList.add('open');
+}
+function closeEditProfileSheet(){
+  document.getElementById('edit-profile-backdrop').classList.remove('open');
+  document.getElementById('edit-profile-sheet').classList.remove('open');
+}
+async function saveProfileEdits(){
+  const name = document.getElementById('ep-name').value.trim();
+  const bio = document.getElementById('ep-bio').value.trim();
+  profile.displayName = name || 'Collector';
+  profile.bio = bio;
+  closeEditProfileSheet();
+  renderProfile();
+  await saveProfileToServer({ displayName: profile.displayName, bio: profile.bio });
+}
+async function saveProfileToServer(fields){
+  try{
+    await fetch(`${PROXY_BASE}/api/profile`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(fields) });
+  } catch(e){}
+}
+
+/* ---------------- list a card ---------------- */
+function openListSheet(){
+  renderPhotoGrid();
+  document.getElementById('list-sheet-backdrop').classList.add('open');
+  document.getElementById('list-sheet').classList.add('open');
+}
+function closeListSheet(){
+  document.getElementById('list-sheet-backdrop').classList.remove('open');
+  document.getElementById('list-sheet').classList.remove('open');
+}
+function renderPhotoGrid(){
+  const grid = document.getElementById('photo-grid');
+  let html = '';
+  pendingNewPhotos.forEach((src, i) => {
+    html += `<div class="photo-slot filled"><img src="${src}">
+      <button class="remove-photo" onclick="removeNewPhoto(${i})">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+      </button></div>`;
+  });
+  if(pendingNewPhotos.length < 4){
+    html += `<label class="photo-slot">
+      <span class="add-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg></span>
+      <input type="file" accept="image/*" onchange="handleNewPhoto(event)"></label>`;
+  }
+  grid.innerHTML = html;
+}
+function handleNewPhoto(e){
+  const file = e.target.files[0];
+  if(!file || pendingNewPhotos.length >= 4) return;
+  const reader = new FileReader();
+  reader.onload = ev => { pendingNewPhotos.push(ev.target.result); renderPhotoGrid(); };
+  reader.readAsDataURL(file);
+}
+function removeNewPhoto(i){ pendingNewPhotos.splice(i, 1); renderPhotoGrid(); }
+function toggleGradeField(){
+  const c = document.getElementById('nf-condition').value;
+  document.getElementById('nf-grade-wrap').style.display = c === 'Raw' ? 'none' : 'block';
+}
+function handleCompScreenshot(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    pendingCompScreenshot = ev.target.result;
+    document.getElementById('comp-photo-drop').innerHTML = `<img src="${pendingCompScreenshot}"><input type="file" accept="image/*" onchange="handleCompScreenshot(event)">`;
+  };
+  reader.readAsDataURL(file);
+}
+async function submitNewListing(){
+  const name = document.getElementById('nf-name').value.trim();
+  const price = Number(document.getElementById('nf-price').value);
+  const compPrice = Number(document.getElementById('nf-comp-price').value);
+  if(!name || !price){ alert('Add at least a title and price to list your card.'); return; }
+  if(!pendingCompScreenshot || !compPrice){ alert('Comp proof is required — add a screenshot and what it sold for.'); return; }
+  const condition = document.getElementById('nf-condition').value;
+  const gradeVal = document.getElementById('nf-grade').value.trim();
+  const payload = {
+    sellerName: profile.displayName || 'Collector',
+    name,
+    sport: document.getElementById('nf-sport').value,
+    year: document.getElementById('nf-year').value,
+    team: document.getElementById('nf-team').value.trim(),
+    price,
+    condition,
+    grade: condition === 'Raw' ? 'Raw' : `${condition}${gradeVal ? ' ' + gradeVal : ''}`,
+    details: document.getElementById('nf-details').value.trim(),
+    photos: pendingNewPhotos,
+    photo: pendingNewPhotos[0] || null,
+    compPrice,
+    compScreenshot: pendingCompScreenshot,
+  };
+  try{
+    const res = await fetch(`${PROXY_BASE}/api/listings`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    if(!res.ok){ const err = await res.json(); alert(err.error || 'Could not create listing.'); return; }
+    const created = await res.json();
+    listings.unshift(created);
+  } catch(e){ alert("Couldn't reach your local server — make sure npm start is running."); return; }
+  pendingNewPhotos = []; pendingCompScreenshot = null;
+  document.getElementById('nf-name').value=''; document.getElementById('nf-team').value='';
+  document.getElementById('nf-price').value=''; document.getElementById('nf-grade').value='';
+  document.getElementById('nf-details').value=''; document.getElementById('nf-condition').value='Raw';
+  document.getElementById('nf-comp-price').value='';
+  document.getElementById('comp-photo-drop').innerHTML = `<span>Tap to add comp screenshot</span><input type="file" accept="image/*" onchange="handleCompScreenshot(event)">`;
+  toggleGradeField();
+  renderPhotoGrid();
+  closeListSheet();
+  renderProfile();
+  if(document.getElementById('tab-market').classList.contains('active')) renderMarketplaceFeed();
+}
+
+/* ---------------- My Collection ---------------- */
+function openCollectionPanel(){
+  renderCollectionGrid();
+  document.getElementById('collection-panel').classList.add('open');
+}
+function closeCollectionPanel(){ document.getElementById('collection-panel').classList.remove('open'); }
+function renderCollectionGrid(){
+  const grid = document.getElementById('collection-grid');
+  if(collection.length === 0){
+    grid.innerHTML = `<div class="empty-collection">Nothing in your collection yet.</div>`;
+    return;
+  }
+  grid.className = 'listings-grid';
+  grid.innerHTML = collection.map(item => {
+    const photos = item.photos && item.photos.length ? item.photos : (item.photo ? [item.photo] : []);
+    return `<div class="mini-card">
+      <button class="mc-delete" onclick="deleteCollectionItem('${item.id}')" title="Remove">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="mc-art">${photos[0] ? `<img src="${photos[0]}">` : ''}</div>
+      <div class="mc-info"><div class="mc-name">${item.name}</div><div class="mc-price">Paid $${Number(item.pricePaid).toFixed(2)}</div></div>
+    </div>`;
+  }).join('');
+}
+function openCollectionAddSheet(){
+  pendingCollectionPhotos = [];
+  renderCollectionPhotoGrid();
+  document.getElementById('collection-add-backdrop').classList.add('open');
+  document.getElementById('collection-add-sheet').classList.add('open');
+}
+function closeCollectionAddSheet(){
+  document.getElementById('collection-add-backdrop').classList.remove('open');
+  document.getElementById('collection-add-sheet').classList.remove('open');
+}
+function renderCollectionPhotoGrid(){
+  const grid = document.getElementById('collection-photo-grid');
+  let html = '';
+  pendingCollectionPhotos.forEach((src, i) => {
+    html += `<div class="photo-slot filled"><img src="${src}">
+      <button class="remove-photo" onclick="removeCollectionPhoto(${i})">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+      </button></div>`;
+  });
+  if(pendingCollectionPhotos.length < 4){
+    html += `<label class="photo-slot">
+      <span class="add-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg></span>
+      <input type="file" accept="image/*" onchange="handleCollectionPhoto(event)"></label>`;
+  }
+  grid.innerHTML = html;
+}
+function handleCollectionPhoto(e){
+  const file = e.target.files[0];
+  if(!file || pendingCollectionPhotos.length >= 4) return;
+  const reader = new FileReader();
+  reader.onload = ev => { pendingCollectionPhotos.push(ev.target.result); renderCollectionPhotoGrid(); };
+  reader.readAsDataURL(file);
+}
+function removeCollectionPhoto(i){ pendingCollectionPhotos.splice(i, 1); renderCollectionPhotoGrid(); }
+function toggleCollectionGradeField(){
+  const c = document.getElementById('cf-condition').value;
+  document.getElementById('cf-grade-wrap').style.display = c === 'Raw' ? 'none' : 'block';
+}
+async function submitCollectionItem(){
+  const name = document.getElementById('cf-name').value.trim();
+  const pricePaid = Number(document.getElementById('cf-price').value);
+  if(!name){ alert('Add at least a title to save this card.'); return; }
+  const condition = document.getElementById('cf-condition').value;
+  const gradeVal = document.getElementById('cf-grade').value.trim();
+  const payload = {
+    name, sport: document.getElementById('cf-sport').value, year: document.getElementById('cf-year').value,
+    team: document.getElementById('cf-team').value.trim(), pricePaid: pricePaid || 0, condition,
+    grade: condition === 'Raw' ? 'Raw' : `${condition}${gradeVal ? ' ' + gradeVal : ''}`,
+    details: document.getElementById('cf-details').value.trim(),
+    photos: pendingCollectionPhotos, photo: pendingCollectionPhotos[0] || null,
+  };
+  try{
+    const res = await fetch(`${PROXY_BASE}/api/collection`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    const created = await res.json();
+    collection.unshift(created);
+  } catch(e){ alert("Couldn't reach your local server — make sure npm start is running."); return; }
+  document.getElementById('cf-name').value=''; document.getElementById('cf-team').value='';
+  document.getElementById('cf-price').value=''; document.getElementById('cf-grade').value='';
+  document.getElementById('cf-details').value=''; document.getElementById('cf-condition').value='Raw';
+  toggleCollectionGradeField();
+  pendingCollectionPhotos = [];
+  closeCollectionAddSheet();
+  renderProfile();
+  renderCollectionGrid();
+}
+async function deleteCollectionItem(id){
+  collection = collection.filter(i => i.id !== id);
+  renderCollectionGrid();
+  renderProfile();
+  try{ await fetch(`${PROXY_BASE}/api/collection/${id}`, { method:'DELETE' }); } catch(e){}
+}
+
+/* ---------------- messages ---------------- */
+function openMessagesPanel(){
+  activeThreadId = null;
+  document.getElementById('thread-list-view').style.display = 'block';
+  document.getElementById('thread-chat-view').style.display = 'none';
+  document.getElementById('msg-panel-title').textContent = 'Messages';
+  document.getElementById('msg-back-btn').onclick = closeMessagesPanel;
+  renderThreadList();
+  document.getElementById('messages-panel').classList.add('open');
+}
+function closeMessagesPanel(){ document.getElementById('messages-panel').classList.remove('open'); }
+function messagesBack(){ closeMessagesPanel(); }
+function renderThreadList(){
+  const el = document.getElementById('thread-list-view');
+  if(threads.length === 0){ el.innerHTML = `<div class="empty-threads">No messages yet. Tap "Message" on a Marketplace listing to start one.</div>`; return; }
+  el.innerHTML = threads.map(t => {
+    const last = t.messages[t.messages.length - 1];
+    return `<div class="thread-row" onclick="openThread('${t.id}')">
+      <div class="thread-avatar">${initials(t.contactName)}</div>
+      <div class="thread-meta">
+        <div class="tm-name">${t.contactName}</div>
+        ${t.listingName ? `<div class="tm-listing">Re: ${t.listingName}</div>` : ''}
+        <div class="tm-last">${last ? last.text : ''}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+function openThread(id){
+  activeThreadId = id;
+  const thread = threads.find(t => t.id === id);
+  if(!thread) return;
+  document.getElementById('thread-list-view').style.display = 'none';
+  document.getElementById('thread-chat-view').style.display = 'flex';
+  document.getElementById('msg-panel-title').textContent = thread.contactName;
+  document.getElementById('msg-back-btn').onclick = backToThreadList;
+  renderThreadChat(thread);
+}
+function backToThreadList(){
+  activeThreadId = null;
+  document.getElementById('thread-list-view').style.display = 'block';
+  document.getElementById('thread-chat-view').style.display = 'none';
+  document.getElementById('msg-panel-title').textContent = 'Messages';
+  document.getElementById('msg-back-btn').onclick = closeMessagesPanel;
+  renderThreadList();
+}
+function renderThreadChat(thread){
+  const body = document.getElementById('msg-chat-body');
+  const intro = thread.listingName ? `<div class="msg-bubble system">Re: ${thread.listingName}</div>` : '';
+  body.innerHTML = intro + thread.messages.map(m => `<div class="msg-bubble ${m.from === 'me' ? 'me' : 'them'}">${m.text}</div>`).join('');
+  body.scrollTop = body.scrollHeight;
+}
+async function sendThreadMessage(){
+  const input = document.getElementById('msg-input');
+  const text = input.value.trim();
+  if(!text) return;
+  const thread = threads.find(t => t.id === activeThreadId);
+  if(!thread) return;
+  input.value = '';
+  try{
+    const res = await fetch(`${PROXY_BASE}/api/messages`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ threadId: thread.id, contactName: thread.contactName, listingName: thread.listingName, listingId: thread.listingId, text }),
+    });
+    const updated = await res.json();
+    const idx = threads.findIndex(t => t.id === updated.id);
+    if(idx >= 0) threads[idx] = updated; else threads.unshift(updated);
+    renderThreadChat(updated);
+  } catch(e){ alert("Couldn't reach your local server — make sure npm start is running."); }
+}
+async function startOrOpenThread(contactName, listingName, listingId, firstMessage){
+  try{
+    const res = await fetch(`${PROXY_BASE}/api/messages`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ contactName, listingName, listingId, text: firstMessage }),
+    });
+    const thread = await res.json();
+    const idx = threads.findIndex(t => t.id === thread.id);
+    if(idx >= 0) threads[idx] = thread; else threads.unshift(thread);
+    openMessagesPanel();
+    openThread(thread.id);
+  } catch(e){ alert("Couldn't reach your local server — make sure npm start is running."); }
+}
+
+/* ---------------- startup ---------------- */
+async function init(){
+  await Promise.all([loadProfile(), loadListings(), loadCollection(), loadMessages()]);
+  renderMarketplaceFeed();
+}
+init();
+document.getElementById('msg-input').addEventListener('keydown', e => { if(e.key === 'Enter') sendThreadMessage(); });
+</script>
+</body>
+</html>

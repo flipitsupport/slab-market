@@ -1,0 +1,5 @@
+node_modules/
+*.json
+!market-package.json
+.DS_Store
+.env
