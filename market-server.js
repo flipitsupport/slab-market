@@ -9,6 +9,8 @@
  */
 
 const express = require('express');
+const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const heicConvert = require('heic-convert');
 const cors = require('cors');
 const fs = require('fs');
@@ -26,6 +28,8 @@ const PROFILE_FILE = path.join(DATA_DIR, 'profile.json');
 const LISTINGS_FILE = path.join(DATA_DIR, 'listings.json');
 const COLLECTION_FILE = path.join(DATA_DIR, 'collection.json');
 const MESSAGES_FILE = path.join(DATA_DIR, 'messages.json');
+const USERS_FILE = path.join(DATA_DIR, 'users.json');
+const SESSIONS_FILE = path.join(DATA_DIR, 'sessions.json');
 
 function readJSON(file, fallback) {
   try {
@@ -215,6 +219,104 @@ app.post('/api/convert-heic', async (req, res) => {
     console.error('HEIC conversion failed:', err.message);
     res.status(500).json({ error: 'This photo could not be converted: ' + err.message });
   }
+});
+
+/* ---------------- accounts / authentication ----------------
+   Real accounts: username + password (hashed with bcrypt, never stored
+   or returned in plain text), email, and a shipping address. Sessions
+   are a random token mapped to a username, sent by the client as
+   "Authorization: Bearer <token>" on requests that need to know who's
+   logged in. Like everything else in this app right now, this data
+   lives in a JSON file on this server — it survives restarts only if
+   a persistent disk is attached (same caveat as your listings data). */
+
+function findSession(token) {
+  const sessions = readJSON(SESSIONS_FILE, {});
+  return sessions[token] || null;
+}
+function requireAuth(req, res, next) {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  const username = token && findSession(token);
+  if (!username) return res.status(401).json({ error: 'Not logged in' });
+  req.username = username;
+  next();
+}
+function publicUser(user) {
+  const { passwordHash, ...rest } = user;
+  return rest;
+}
+
+app.post('/api/auth/register', (req, res) => {
+  const { username, password, email, shippingAddress } = req.body;
+  if (!username || !username.trim() || !password || password.length < 6) {
+    return res.status(400).json({ error: 'Username is required and password must be at least 6 characters.' });
+  }
+  const users = readJSON(USERS_FILE, {});
+  const key = username.trim().toLowerCase();
+  if (users[key]) {
+    return res.status(409).json({ error: 'That username is already taken.' });
+  }
+  const user = {
+    username: username.trim(),
+    passwordHash: bcrypt.hashSync(password, 10),
+    email: email || '',
+    shippingAddress: shippingAddress || '',
+    createdAt: new Date().toISOString(),
+  };
+  users[key] = user;
+  writeJSON(USERS_FILE, users);
+
+  const token = crypto.randomBytes(24).toString('hex');
+  const sessions = readJSON(SESSIONS_FILE, {});
+  sessions[token] = user.username;
+  writeJSON(SESSIONS_FILE, sessions);
+
+  res.json({ token, user: publicUser(user) });
+});
+
+app.post('/api/auth/login', (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) return res.status(400).json({ error: 'Username and password are required.' });
+  const users = readJSON(USERS_FILE, {});
+  const key = username.trim().toLowerCase();
+  const user = users[key];
+  if (!user || !bcrypt.compareSync(password, user.passwordHash)) {
+    return res.status(401).json({ error: 'Incorrect username or password.' });
+  }
+  const token = crypto.randomBytes(24).toString('hex');
+  const sessions = readJSON(SESSIONS_FILE, {});
+  sessions[token] = user.username;
+  writeJSON(SESSIONS_FILE, sessions);
+  res.json({ token, user: publicUser(user) });
+});
+
+app.post('/api/auth/logout', requireAuth, (req, res) => {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.slice(7);
+  const sessions = readJSON(SESSIONS_FILE, {});
+  delete sessions[token];
+  writeJSON(SESSIONS_FILE, sessions);
+  res.json({ loggedOut: true });
+});
+
+app.get('/api/auth/me', requireAuth, (req, res) => {
+  const users = readJSON(USERS_FILE, {});
+  const user = users[req.username.toLowerCase()];
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  res.json({ user: publicUser(user) });
+});
+
+app.put('/api/auth/me', requireAuth, (req, res) => {
+  const users = readJSON(USERS_FILE, {});
+  const key = req.username.toLowerCase();
+  const user = users[key];
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  if (typeof req.body.email === 'string') user.email = req.body.email;
+  if (typeof req.body.shippingAddress === 'string') user.shippingAddress = req.body.shippingAddress;
+  users[key] = user;
+  writeJSON(USERS_FILE, users);
+  res.json({ user: publicUser(user) });
 });
 
 app.listen(PORT, () => console.log(`Slab Market server running on http://localhost:${PORT}`));

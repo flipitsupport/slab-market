@@ -37,6 +37,16 @@
     background:linear-gradient(100deg, var(--grad3), var(--grad1) 60%, var(--grad2));
     -webkit-background-clip:text; background-clip:text; color:transparent;
   }
+  .account-icon-btn{
+    width:34px; height:34px; border-radius:50%; background:var(--surface); border:1px solid var(--line);
+    color:var(--ink); cursor:pointer; align-items:center; justify-content:center;
+    box-shadow:0 2px 8px -4px rgba(33,28,51,0.1); position:relative;
+  }
+  .account-icon-btn svg{ width:18px; height:18px; }
+  .account-icon-btn .dot{
+    position:absolute; top:-1px; right:-1px; width:9px; height:9px; border-radius:50%;
+    background:var(--like); border:1.5px solid var(--surface);
+  }
   .search-row{margin-top:10px;}
   .search-row input{
     width:100%;background:var(--surface);border:1px solid var(--line);color:var(--ink);
@@ -295,6 +305,18 @@
   .no-fee-note{font-family:'Inter',sans-serif;font-size:11px;color:var(--like);background:var(--like-soft);
     padding:8px 12px;border-radius:12px;margin-bottom:14px;display:inline-block;font-weight:600;}
 
+  .auth-error{background:var(--pass-soft);color:var(--pass);font-family:'Inter',sans-serif;font-size:12px;
+    padding:10px 13px;border-radius:12px;margin-bottom:14px;}
+  .auth-toggle-link{background:none;border:none;color:var(--violet);font-family:'Inter',sans-serif;
+    font-size:12.5px;font-weight:600;cursor:pointer;padding:0;margin-top:4px;}
+  .account-info-row{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:16px;}
+  .account-info-row .air-label{font-family:'Inter',sans-serif;font-size:10.5px;color:var(--ink-soft);}
+  .account-info-row .air-value{font-family:'Poppins',sans-serif;font-weight:600;font-size:15px;color:var(--ink);margin-top:2px;}
+  .logout-btn{
+    width:100%;background:var(--pass-soft);color:var(--pass);border:none;font-family:'Poppins',sans-serif;
+    font-weight:600;font-size:13.5px;padding:13px;border-radius:14px;cursor:pointer;margin-top:8px;
+  }
+
   .comp-proof-box{background:var(--amber-soft);border-radius:16px;padding:14px;margin:14px 0;border:1.5px solid var(--amber);}
   .comp-proof-head{font-family:'Poppins',sans-serif;font-weight:700;font-size:13px;color:#8a5a00;display:flex;align-items:center;gap:8px;}
   .required-tag{background:var(--pass);color:#fff;font-size:9px;font-weight:700;padding:2px 8px;border-radius:20px;font-family:'Inter',sans-serif;}
@@ -318,6 +340,9 @@
   <div class="topbar">
     <div class="topbar-row">
       <div class="wordmark">Slab Market</div>
+      <button class="account-icon-btn" id="account-icon-btn" onclick="openAccountPanel()" style="display:none;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>
+      </button>
     </div>
     <div class="search-row" id="search-row">
       <input type="text" id="search-input" placeholder="Search player, team, set..." oninput="applyFilters()">
@@ -504,6 +529,16 @@
     <div class="panel-scroll" id="sellers-content"></div>
   </div>
 
+  <div id="account-panel" class="side-panel">
+    <div class="panel-head">
+      <button class="back-btn" onclick="closeAccountPanel()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="panel-title">Account</div>
+    </div>
+    <div class="panel-scroll" id="account-content"></div>
+  </div>
+
 </div>
 
 <script>
@@ -598,6 +633,7 @@ function showView(view){
   document.getElementById('profile-view').classList.toggle('active', view==='profile');
   document.getElementById('search-row').style.display = view==='market' ? 'block' : 'none';
   document.getElementById('filter-row').style.display = view==='market' ? 'flex' : 'none';
+  document.getElementById('account-icon-btn').style.display = view==='profile' ? 'flex' : 'none';
   if(view==='market') renderMarketplaceFeed();
   if(view==='saved') renderSavedList();
   if(view==='profile') renderProfile();
@@ -990,6 +1026,137 @@ async function submitNewListing(){
    marked as sold. There's no in-app payment processing yet, so "sold"
    is a manual record you create yourself when a deal closes outside
    the app (message, cash, however you actually got paid). */
+/* ---------------- account / authentication ----------------
+   Real login: the server hashes and checks passwords, this just holds
+   the session token (in localStorage, since this is a real deployed
+   webpage, not a sandboxed preview) and sends it on requests that need
+   to know who's logged in. */
+let authToken = localStorage.getItem('slabmarket_token') || null;
+let currentUser = null;
+let accountFormMode = 'login'; // 'login' | 'register'
+
+async function loadCurrentUser(){
+  if(!authToken) return;
+  try{
+    const res = await fetch(`${PROXY_BASE}/api/auth/me`, { headers: { 'Authorization': 'Bearer ' + authToken } });
+    if(!res.ok){ authToken = null; localStorage.removeItem('slabmarket_token'); return; }
+    const data = await res.json();
+    currentUser = data.user;
+    profile.displayName = currentUser.username; // ties your public identity to your real account
+  } catch(e){ /* stay logged out locally if the server can't be reached */ }
+}
+
+function openAccountPanel(){
+  accountFormMode = 'login';
+  renderAccountPanel();
+  document.getElementById('account-panel').classList.add('open');
+}
+function closeAccountPanel(){ document.getElementById('account-panel').classList.remove('open'); }
+
+function renderAccountPanel(){
+  const el = document.getElementById('account-content');
+  if(currentUser){
+    el.innerHTML = `
+      <div class="account-info-row"><div class="air-label">Username</div><div class="air-value">${currentUser.username}</div></div>
+      <div class="form-field"><label>Email</label><input type="email" id="acc-email" value="${currentUser.email || ''}" placeholder="you@example.com"></div>
+      <div class="form-field"><label>Shipping address</label><textarea id="acc-shipping" rows="3" placeholder="Street, city, state, ZIP">${currentUser.shippingAddress || ''}</textarea></div>
+      <button class="send-btn" onclick="saveAccountDetails()">Save changes</button>
+      <button class="logout-btn" onclick="submitLogout()">Log out</button>
+    `;
+    return;
+  }
+  if(accountFormMode === 'register'){
+    el.innerHTML = `
+      <div id="auth-error"></div>
+      <div class="form-field"><label>Username</label><input type="text" id="acc-username" placeholder="Pick a username"></div>
+      <div class="form-field"><label>Password</label><input type="password" id="acc-password" placeholder="At least 6 characters"></div>
+      <div class="form-field"><label>Email</label><input type="email" id="acc-email" placeholder="you@example.com"></div>
+      <div class="form-field"><label>Shipping address</label><textarea id="acc-shipping" rows="3" placeholder="Street, city, state, ZIP"></textarea></div>
+      <button class="send-btn" onclick="submitRegister()">Create account</button>
+      <button class="auth-toggle-link" onclick="accountFormMode='login'; renderAccountPanel();">Already have an account? Log in</button>
+    `;
+  } else {
+    el.innerHTML = `
+      <div id="auth-error"></div>
+      <div class="form-field"><label>Username</label><input type="text" id="acc-username" placeholder="Your username"></div>
+      <div class="form-field"><label>Password</label><input type="password" id="acc-password" placeholder="Your password"></div>
+      <button class="send-btn" onclick="submitLogin()">Log in</button>
+      <button class="auth-toggle-link" onclick="accountFormMode='register'; renderAccountPanel();">Need an account? Sign up</button>
+    `;
+  }
+}
+
+function showAuthError(msg){
+  const el = document.getElementById('auth-error');
+  if(el) el.innerHTML = `<div class="auth-error">${msg}</div>`;
+}
+
+async function submitLogin(){
+  const username = document.getElementById('acc-username').value.trim();
+  const password = document.getElementById('acc-password').value;
+  if(!username || !password){ showAuthError('Enter your username and password.'); return; }
+  try{
+    const res = await fetch(`${PROXY_BASE}/api/auth/login`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json();
+    if(!res.ok){ showAuthError(data.error || 'Login failed.'); return; }
+    authToken = data.token;
+    localStorage.setItem('slabmarket_token', authToken);
+    currentUser = data.user;
+    profile.displayName = currentUser.username;
+    renderAccountPanel();
+    renderProfile();
+  } catch(e){ showAuthError("Couldn't reach the server — make sure it's running."); }
+}
+
+async function submitRegister(){
+  const username = document.getElementById('acc-username').value.trim();
+  const password = document.getElementById('acc-password').value;
+  const email = document.getElementById('acc-email').value.trim();
+  const shippingAddress = document.getElementById('acc-shipping').value.trim();
+  if(!username || !password){ showAuthError('Username and password are required.'); return; }
+  try{
+    const res = await fetch(`${PROXY_BASE}/api/auth/register`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ username, password, email, shippingAddress }),
+    });
+    const data = await res.json();
+    if(!res.ok){ showAuthError(data.error || 'Could not create account.'); return; }
+    authToken = data.token;
+    localStorage.setItem('slabmarket_token', authToken);
+    currentUser = data.user;
+    profile.displayName = currentUser.username;
+    renderAccountPanel();
+    renderProfile();
+  } catch(e){ showAuthError("Couldn't reach the server — make sure it's running."); }
+}
+
+async function saveAccountDetails(){
+  const email = document.getElementById('acc-email').value.trim();
+  const shippingAddress = document.getElementById('acc-shipping').value.trim();
+  try{
+    const res = await fetch(`${PROXY_BASE}/api/auth/me`, {
+      method:'PUT', headers:{'Content-Type':'application/json', 'Authorization':'Bearer ' + authToken},
+      body: JSON.stringify({ email, shippingAddress }),
+    });
+    const data = await res.json();
+    if(res.ok){ currentUser = data.user; alert('Saved.'); }
+    else alert(data.error || 'Could not save changes.');
+  } catch(e){ alert("Couldn't reach the server — make sure it's running."); }
+}
+
+async function submitLogout(){
+  try{
+    await fetch(`${PROXY_BASE}/api/auth/logout`, { method:'POST', headers:{'Authorization':'Bearer ' + authToken} });
+  } catch(e){ /* proceed to clear local state regardless */ }
+  authToken = null;
+  currentUser = null;
+  localStorage.removeItem('slabmarket_token');
+  accountFormMode = 'login';
+  renderAccountPanel();
+}
+
 function openSellersPanel(){
   renderSellersDashboard();
   document.getElementById('sellers-panel').classList.add('open');
@@ -1266,7 +1433,7 @@ async function reloadListings(){
 }
 
 async function init(){
-  await Promise.all([loadProfile(), loadListings(), loadCollection(), loadMessages()]);
+  await Promise.all([loadProfile(), loadListings(), loadCollection(), loadMessages(), loadCurrentUser()]);
   renderMarketplaceFeed();
 }
 init();
