@@ -7,16 +7,16 @@
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg1:#FDF4EC; --bg2:#F3EEFF;
+    --bg1:#F2F4F7; --bg2:#EAEDF2;
     --surface:#FFFFFF;
-    --ink:#211C33; --ink-soft:#7A7690;
-    --grad1:#FF6F91; --grad2:#FFA45C; --grad3:#7C6AFF;
-    --like:#17C978; --like-soft:#E4FBF0;
-    --pass:#FF5C7A; --pass-soft:#FFE7EC;
-    --amber:#FFB020; --amber-soft:#FFF3DD;
-    --violet:#7C6AFF; --violet-soft:#EFEBFF;
-    --line:rgba(33,28,51,0.08);
-    --shadow: 0 20px 45px -18px rgba(124,106,255,0.28), 0 4px 14px -6px rgba(33,28,51,0.08);
+    --ink:#1B2430; --ink-soft:#63707D;
+    --grad1:#2E5B8A; --grad2:#1B3A5C; --grad3:#3D7A99;
+    --like:#2F8F5B; --like-soft:#E3F3EA;
+    --pass:#B3453D; --pass-soft:#F5E5E3;
+    --amber:#B8862E; --amber-soft:#F2ECDD;
+    --violet:#3D5A80; --violet-soft:#EAEEF3;
+    --line:rgba(27,36,48,0.08);
+    --shadow: 0 20px 45px -18px rgba(27,54,80,0.18), 0 4px 14px -6px rgba(27,36,48,0.07);
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;height:100%;}
@@ -25,7 +25,7 @@
     -webkit-user-select:none; user-select:none;
     background: radial-gradient(circle at 15% 0%, var(--bg2), transparent 55%),
                 radial-gradient(circle at 85% 100%, var(--bg1), transparent 55%),
-                #FFFBF7;
+                #F9FAFB;
   }
   #app{max-width:460px;margin:0 auto;height:100vh;display:flex;flex-direction:column;position:relative;}
 
@@ -82,7 +82,7 @@
   .mp-avatar img{width:100%;height:100%;object-fit:cover;}
   .mp-seller{font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;color:var(--ink);flex:1;}
   .mp-deal-badge{
-    background:linear-gradient(120deg, #FF5C7A, #FFA45C);color:#fff;font-family:'Poppins',sans-serif;
+    background:var(--ink);color:#fff;font-family:'Poppins',sans-serif;
     font-weight:700;font-size:10px;padding:5px 10px;border-radius:20px;white-space:nowrap;
   }
   .mp-img{width:100%;aspect-ratio:1/1;background:#fff;position:relative;}
@@ -252,7 +252,7 @@
   .sheet-handle{width:38px;height:5px;background:var(--line);border-radius:10px;margin:0 auto 16px;}
   .sheet h3{font-family:'Poppins',sans-serif;font-weight:600;margin:0 0 3px;font-size:17px;line-height:1.35;}
   .sheet .sub{color:var(--ink-soft);font-size:12.5px;margin-bottom:16px;}
-  .send-btn{width:100%;background:linear-gradient(120deg, var(--like), #0FAF63);color:#fff;border:none;
+  .send-btn{width:100%;background:linear-gradient(120deg, var(--like), #256F47);color:#fff;border:none;
     font-family:'Poppins',sans-serif;font-weight:600;font-size:15px;letter-spacing:0.2px;
     padding:15px;border-radius:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;
     box-shadow:0 10px 24px -8px rgba(23,201,120,0.5);margin-top:6px;}
@@ -394,7 +394,7 @@
     <div class="form-field"><label>Asking price ($)</label><input type="number" id="nf-price" placeholder="45"></div>
 
     <div class="comp-proof-box">
-      <div class="comp-proof-head">📸 Comp proof <span class="required-tag">required</span></div>
+      <div class="comp-proof-head">Comp proof <span class="required-tag">required</span></div>
       <div class="comp-proof-sub">Upload a screenshot of what this card actually sold for (eBay sold listing, CardLadder, etc). Other collectors will rate whether it looks legit — listings priced below their comp get pushed to the top of the feed.</div>
       <label class="photo-drop" id="comp-photo-drop">
         <span>Tap to add comp screenshot</span>
@@ -660,7 +660,7 @@ function renderMarketplaceFeed(){
   }
 
   el.innerHTML = `
-    <div class="mp-intro">🔥 Ranked by how far below the seller's comp they're priced — rate the screenshot proof to help keep this honest.</div>
+    <div class="mp-intro">Ranked by how far below the seller's comp they're priced — rate the screenshot proof to help keep this honest.</div>
     ${filtered.map(item => renderMarketplacePost(item)).join('')}
   `;
 }
@@ -669,7 +669,7 @@ function renderMarketplacePost(item){
   const photos = item.photos && item.photos.length ? item.photos : (item.photo ? [item.photo] : []);
   const rating = avgRating(item);
   const pctBelow = Math.round((1 - item.price / item.compPrice) * 100);
-  const dealBadge = pctBelow > 0 ? `<div class="mp-deal-badge">🔥 ${pctBelow}% below comp</div>` : '';
+  const dealBadge = pctBelow > 0 ? `<div class="mp-deal-badge">${pctBelow}% below comp</div>` : '';
   const isLiked = saved.some(s => s.id === item.id);
   const isOwn = item.sellerName === (profile.displayName || 'Collector');
 
@@ -799,14 +799,14 @@ function renderProfile(){
     </div>
     ${profile.bio ? `<div class="profile-bio">${profile.bio}</div>` : `<button class="add-bio-btn" onclick="openEditProfileSheet()">+ Add a bio</button>`}
     <button class="entry-btn" onclick="openSellersPanel()">
-      <span>💰 Sellers</span>
+      <span>Sellers</span>
     </button>
     <button class="entry-btn" onclick="openCollectionPanel()">
-      <span>📦 My Collection</span>
+      <span>My Collection</span>
       <span class="entry-badge" id="collection-count-badge" style="display:${collection.length ? 'inline-block' : 'none'};">${collection.length}</span>
     </button>
     <button class="entry-btn" onclick="openMessagesPanel()">
-      <span>💬 Messages</span>
+      <span>Messages</span>
       <span class="entry-badge" id="msg-count-badge" style="display:${threads.length ? 'inline-block' : 'none'};">${threads.length}</span>
     </button>
     <button class="list-card-btn" onclick="openListSheet()">
