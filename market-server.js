@@ -83,6 +83,10 @@ app.post('/api/listings', (req, res) => {
     compPrice: Number(req.body.compPrice),
     compScreenshot: req.body.compScreenshot,
     ratings: [],
+    status: 'active', // 'active' | 'sold'
+    soldPrice: null,
+    soldAt: null,
+    buyerName: null,
   };
   listings.unshift(listing);
   writeJSON(LISTINGS_FILE, listings);
@@ -106,6 +110,22 @@ app.delete('/api/listings/:id', (req, res) => {
   const next = listings.filter(l => l.id !== req.params.id);
   writeJSON(LISTINGS_FILE, next);
   res.json({ deleted: listings.length !== next.length });
+});
+
+// Seller marks their own listing as sold — this is what actually powers
+// the Sellers dashboard's order history and revenue total. There's no
+// in-app payment processing yet, so this is a manual record, not an
+// automated transaction.
+app.post('/api/listings/:id/sold', (req, res) => {
+  const listings = readJSON(LISTINGS_FILE, []);
+  const listing = listings.find(l => l.id === req.params.id);
+  if (!listing) return res.status(404).json({ error: 'Listing not found' });
+  listing.status = 'sold';
+  listing.soldPrice = req.body.soldPrice ? Number(req.body.soldPrice) : listing.price;
+  listing.soldAt = new Date().toISOString();
+  listing.buyerName = req.body.buyerName || null;
+  writeJSON(LISTINGS_FILE, listings);
+  res.json(listing);
 });
 
 /* ---------------- My Collection (cards you own, not for sale) ---------------- */

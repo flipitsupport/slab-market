@@ -37,11 +37,36 @@
     background:linear-gradient(100deg, var(--grad3), var(--grad1) 60%, var(--grad2));
     -webkit-background-clip:text; background-clip:text; color:transparent;
   }
-  .tabs{display:flex;gap:4px;background:rgba(124,106,255,0.07);border-radius:100px;padding:4px;}
-  .tab-btn{flex:1;font-family:'Poppins',sans-serif;font-size:12.5px;font-weight:600;padding:9px 8px;border-radius:100px;
-    border:none;background:transparent;color:var(--ink-soft);cursor:pointer;transition:all .2s ease;}
-  .tab-btn.active{background:var(--surface);color:var(--violet);box-shadow:0 4px 14px -6px rgba(124,106,255,0.35);}
-  .tab-btn .badge{display:inline-block;margin-left:5px;background:var(--pass);color:#fff;font-size:9.5px;font-weight:700;border-radius:20px;padding:1px 6px;}
+  .search-row{margin-top:10px;}
+  .search-row input{
+    width:100%;background:var(--surface);border:1px solid var(--line);color:var(--ink);
+    border-radius:100px;padding:11px 16px;font-size:13px;font-family:'Inter',sans-serif;
+    box-shadow:0 2px 8px -4px rgba(33,28,51,0.06);
+  }
+  .search-row input:focus{outline:none;border-color:var(--violet);}
+  .filter-row{display:flex;gap:8px;margin-top:8px;}
+  .filter-row select{
+    flex:1;background:var(--surface);border:1px solid var(--line);color:var(--ink);
+    border-radius:100px;padding:9px 12px;font-size:12px;font-family:'Inter',sans-serif;
+    box-shadow:0 2px 8px -4px rgba(33,28,51,0.06);
+  }
+  .filter-row select:focus{outline:none;border-color:var(--violet);}
+
+  /* ---------- bottom tab bar ---------- */
+  .tabs{
+    display:flex; flex-shrink:0; background:var(--surface); border-top:1px solid var(--line);
+    padding:8px 8px calc(8px + env(safe-area-inset-bottom));
+  }
+  .tab-btn{
+    flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;
+    font-family:'Poppins',sans-serif; font-size:10.5px; font-weight:600;
+    padding:7px 4px; border-radius:14px; border:none; background:transparent;
+    color:var(--ink-soft); cursor:pointer; transition:all .2s ease; position:relative;
+  }
+  .tab-btn svg{width:22px;height:22px;}
+  .tab-btn.active{color:var(--violet);}
+  .tab-btn.active svg{fill:rgba(124,106,255,0.12);}
+  .tab-btn .badge{position:absolute;top:2px;right:calc(50% - 20px);background:var(--pass);color:#fff;font-size:9px;font-weight:700;border-radius:20px;padding:1px 6px;}
 
   /* ---------- marketplace feed ---------- */
   #marketplace-view{flex:1;overflow-y:auto;padding:12px 16px 24px;display:none;}
@@ -194,6 +219,29 @@
   /* collection */
   .empty-collection{text-align:center;color:var(--ink-soft);padding:30px 10px;font-size:13px;}
 
+  /* ---------- sellers dashboard ---------- */
+  .seller-stats-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;}
+  .seller-stat-card{background:var(--surface);border-radius:16px;padding:14px;box-shadow:0 6px 18px -10px rgba(33,28,51,0.15);}
+  .seller-stat-card.wide{grid-column:1/-1;background:linear-gradient(135deg, var(--grad3), var(--grad1) 60%, var(--grad2));color:#fff;}
+  .ssc-label{font-family:'Inter',sans-serif;font-size:10.5px;color:var(--ink-soft);}
+  .seller-stat-card.wide .ssc-label{color:rgba(255,255,255,0.85);}
+  .ssc-value{font-family:'Poppins',sans-serif;font-weight:800;font-size:22px;color:var(--ink);margin-top:2px;}
+  .seller-stat-card.wide .ssc-value{color:#fff;font-size:30px;}
+  .seller-order-row{display:flex;gap:12px;align-items:center;background:var(--surface);border-radius:16px;
+    padding:11px;margin-bottom:10px;box-shadow:0 4px 14px -8px rgba(33,28,51,0.15);}
+  .seller-order-row .so-thumb{width:44px;height:44px;border-radius:10px;background:#fff;overflow:hidden;flex-shrink:0;border:1px solid var(--line);}
+  .seller-order-row .so-thumb img{width:100%;height:100%;object-fit:contain;}
+  .seller-order-row .so-meta{flex:1;min-width:0;}
+  .seller-order-row .so-name{font-family:'Poppins',sans-serif;font-weight:600;font-size:12.5px;color:var(--ink);
+    display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;}
+  .seller-order-row .so-sub{font-family:'Inter',sans-serif;font-size:11px;color:var(--ink-soft);margin-top:2px;}
+  .seller-order-row .so-price{font-family:'Poppins',sans-serif;font-weight:700;font-size:14px;color:var(--like);flex-shrink:0;}
+  .mark-sold-btn{
+    background:var(--like-soft);color:var(--like);border:none;font-family:'Poppins',sans-serif;font-weight:600;
+    font-size:11px;padding:7px 12px;border-radius:100px;cursor:pointer;flex-shrink:0;
+  }
+  .active-listing-status{background:var(--amber-soft);color:#8a5a00;font-size:9.5px;font-weight:700;padding:2px 8px;border-radius:20px;font-family:'Inter',sans-serif;}
+
   /* ---------- sheets ---------- */
   .sheet-backdrop{position:absolute;inset:0;background:rgba(33,28,51,0.35);opacity:0;pointer-events:none;transition:opacity .25s ease;z-index:20;}
   .sheet-backdrop.open{opacity:1;pointer-events:auto;}
@@ -266,16 +314,41 @@
     <div class="topbar-row">
       <div class="wordmark">Slab Market</div>
     </div>
-    <div class="tabs">
-      <button class="tab-btn active" id="tab-market" onclick="showView('market')">Marketplace</button>
-      <button class="tab-btn" id="tab-saved" onclick="showView('saved')">Saved<span class="badge" id="saved-badge" style="display:none;">0</span></button>
-      <button class="tab-btn" id="tab-profile" onclick="showView('profile')">Profile</button>
+    <div class="search-row" id="search-row">
+      <input type="text" id="search-input" placeholder="Search player, team, set..." oninput="applyFilters()">
+    </div>
+    <div class="filter-row" id="filter-row">
+      <select id="filter-sport" onchange="applyFilters()">
+        <option value="">All sports</option>
+        <option>Baseball</option><option>Basketball</option><option>Hockey</option><option>Football</option>
+      </select>
+      <select id="filter-sort" onchange="applyFilters()">
+        <option value="deal">Best deal</option>
+        <option value="price-low">Price: Low to High</option>
+        <option value="price-high">Price: High to Low</option>
+        <option value="newest">Newest</option>
+      </select>
     </div>
   </div>
 
   <div id="marketplace-view"></div>
   <div id="saved-view"></div>
   <div id="profile-view"></div>
+
+  <div class="tabs">
+    <button class="tab-btn active" id="tab-market" onclick="showView('market')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><path d="M9 22V12h6v10"/></svg>
+      <span>Marketplace</span>
+    </button>
+    <button class="tab-btn" id="tab-saved" onclick="showView('saved')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7.5-4.6-10-9.3C.4 8 2 4.5 5.6 4c2-.3 3.7.6 4.9 2.2C11.7 4.6 13.4 3.7 15.4 4c3.6.5 5.2 4 3.6 7.7C16.5 16.4 12 21 12 21z"/></svg>
+      <span>Saved</span><span class="badge" id="saved-badge" style="display:none;">0</span>
+    </button>
+    <button class="tab-btn" id="tab-profile" onclick="showView('profile')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>
+      <span>Profile</span>
+    </button>
+  </div>
 
   <div class="comp-proof-modal-backdrop" id="comp-proof-modal-backdrop" onclick="closeCompProofModal()">
     <div class="comp-proof-modal"><img id="comp-proof-modal-img" src=""></div>
@@ -416,10 +489,20 @@
     </div>
   </div>
 
+  <div id="sellers-panel" class="side-panel">
+    <div class="panel-head">
+      <button class="back-btn" onclick="closeSellersPanel()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="panel-title">Sellers</div>
+    </div>
+    <div class="panel-scroll" id="sellers-content"></div>
+  </div>
+
 </div>
 
 <script>
-const PROXY_BASE = 'http://localhost:3001';
+const PROXY_BASE = ''; // relative — automatically points wherever this page is actually served from
 
 /* ---------------- state ---------------- */
 let profile = { displayName: 'Collector' };
@@ -436,8 +519,18 @@ let pendingCollectionPhotos = [];
 async function loadProfile(){
   try{ const res = await fetch(`${PROXY_BASE}/api/profile`); profile = await res.json(); } catch(e){}
 }
+let listingsLoadError = null;
 async function loadListings(){
-  try{ const res = await fetch(`${PROXY_BASE}/api/listings`); listings = await res.json(); } catch(e){ listings = []; }
+  try{
+    const res = await fetch(`${PROXY_BASE}/api/listings`);
+    if(!res.ok) throw new Error(`Server responded ${res.status}`);
+    listings = await res.json();
+    listingsLoadError = null;
+  } catch(e){
+    console.error('Failed to load listings:', e);
+    listings = [];
+    listingsLoadError = e.message;
+  }
 }
 async function loadCollection(){
   try{ const res = await fetch(`${PROXY_BASE}/api/collection`); collection = await res.json(); } catch(e){ collection = []; }
@@ -446,6 +539,44 @@ async function loadMessages(){
   try{ const res = await fetch(`${PROXY_BASE}/api/messages`); threads = await res.json(); } catch(e){ threads = []; }
   const badge = document.getElementById('msg-count-badge');
   if(badge){ badge.style.display = threads.length ? 'inline-block' : 'none'; badge.textContent = threads.length; }
+}
+
+/* ---------------- photo reading, with HEIC/HEIF support ----------------
+   iPhones save photos as HEIC/HEIF by default, which no browser (not even
+   Safari) can display in an <img> tag. This detects that format and
+   converts it to a normal JPEG entirely client-side before it's ever
+   turned into the data URL the rest of the app uses. */
+async function fileToDataURL(file){
+  // Read the raw file first — FileReader doesn't care about format,
+  // it just base64-encodes whatever bytes are there.
+  const rawDataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = ev => resolve(ev.target.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  const isHeic = file.type === 'image/heic' || file.type === 'image/heif' || /\.(heic|heif)$/i.test(file.name);
+  if(!isHeic) return rawDataUrl;
+
+  // HEIC/HEIF (the default iPhone photo format) can't be displayed by any
+  // browser, so this hands it to the server to convert with a real Node
+  // library — more reliable than any browser-side decoder.
+  try{
+    const res = await fetch(`${PROXY_BASE}/api/convert-heic`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ dataUrl: rawDataUrl }),
+    });
+    if(!res.ok){
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Server responded ${res.status}`);
+    }
+    const data = await res.json();
+    return data.dataUrl;
+  } catch(err){
+    alert("Couldn't convert this photo: " + err.message + ". Make sure your local server is running (npm start), then try again.");
+    throw err;
+  }
 }
 
 function initials(name){
@@ -460,6 +591,8 @@ function showView(view){
   document.getElementById('marketplace-view').classList.toggle('active', view==='market');
   document.getElementById('saved-view').classList.toggle('active', view==='saved');
   document.getElementById('profile-view').classList.toggle('active', view==='profile');
+  document.getElementById('search-row').style.display = view==='market' ? 'block' : 'none';
+  document.getElementById('filter-row').style.display = view==='market' ? 'flex' : 'none';
   if(view==='market') renderMarketplaceFeed();
   if(view==='saved') renderSavedList();
   if(view==='profile') renderProfile();
@@ -478,11 +611,41 @@ function avgRating(listing){
   return ratings.reduce((sum, r) => sum + r.stars, 0) / ratings.length;
 }
 
+function applyFilters(){
+  if(document.getElementById('tab-market').classList.contains('active')) renderMarketplaceFeed();
+}
+
 function renderMarketplaceFeed(){
   const el = document.getElementById('marketplace-view');
-  const ranked = [...listings].sort((a, b) => (b.compPrice - b.price) - (a.compPrice - a.price));
+  const query = (document.getElementById('search-input').value || '').toLowerCase().trim();
+  const sportFilter = document.getElementById('filter-sport').value;
+  const sortMode = document.getElementById('filter-sort').value;
 
-  if(ranked.length === 0){
+  let filtered = listings.filter(item => {
+    if(item.status === 'sold') return false;
+    if(sportFilter && item.sport !== sportFilter) return false;
+    if(query){
+      const haystack = `${item.name} ${item.team} ${item.sport}`.toLowerCase();
+      if(!haystack.includes(query)) return false;
+    }
+    return true;
+  });
+
+  if(sortMode === 'price-low') filtered.sort((a,b) => a.price - b.price);
+  else if(sortMode === 'price-high') filtered.sort((a,b) => b.price - a.price);
+  else if(sortMode === 'newest') filtered.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+  else filtered.sort((a,b) => (b.compPrice - b.price) - (a.compPrice - a.price)); // best deal, default
+
+  if(listings.length === 0){
+    if(listingsLoadError){
+      el.innerHTML = `
+        <div class="empty-marketplace">
+          <div class="big">Couldn't load listings</div>
+          ${listingsLoadError}<br><br>
+          <button onclick="reloadListings()" style="background:var(--violet);color:#fff;border:none;padding:10px 18px;border-radius:100px;font-family:'Poppins',sans-serif;font-weight:600;font-size:12px;cursor:pointer;">Try again</button>
+        </div>`;
+      return;
+    }
     el.innerHTML = `
       <div class="mp-intro">Listings priced below their comp get pushed to the top here.</div>
       <div class="empty-marketplace">
@@ -491,10 +654,14 @@ function renderMarketplaceFeed(){
       </div>`;
     return;
   }
+  if(filtered.length === 0){
+    el.innerHTML = `<div class="empty-marketplace"><div class="big">No matches</div>Try a different search or filter.</div>`;
+    return;
+  }
 
   el.innerHTML = `
     <div class="mp-intro">🔥 Ranked by how far below the seller's comp they're priced — rate the screenshot proof to help keep this honest.</div>
-    ${ranked.map(item => renderMarketplacePost(item)).join('')}
+    ${filtered.map(item => renderMarketplacePost(item)).join('')}
   `;
 }
 
@@ -631,6 +798,9 @@ function renderProfile(){
       </div>
     </div>
     ${profile.bio ? `<div class="profile-bio">${profile.bio}</div>` : `<button class="add-bio-btn" onclick="openEditProfileSheet()">+ Add a bio</button>`}
+    <button class="entry-btn" onclick="openSellersPanel()">
+      <span>💰 Sellers</span>
+    </button>
     <button class="entry-btn" onclick="openCollectionPanel()">
       <span>📦 My Collection</span>
       <span class="entry-badge" id="collection-count-badge" style="display:${collection.length ? 'inline-block' : 'none'};">${collection.length}</span>
@@ -666,7 +836,7 @@ function renderMyListingsGrid(myListings){
       <div class="mc-art">${photos[0] ? `<img src="${photos[0]}">` : ''}</div>
       <div class="mc-info">
         <div class="mc-name">${item.name}</div>
-        <div class="mc-price">$${Number(item.price).toFixed(2)} · comp $${Number(item.compPrice).toFixed(2)}</div>
+        <div class="mc-price">${item.status === 'sold' ? `<span class="active-listing-status" style="background:var(--like-soft);color:var(--like);">Sold $${(item.soldPrice||0).toFixed(2)}</span>` : `$${Number(item.price).toFixed(2)} · comp $${Number(item.compPrice).toFixed(2)}`}</div>
       </div>
     </div>`;
   }).join('');
@@ -679,17 +849,15 @@ async function deleteListing(id){
 }
 
 let pendingAvatarPhoto = null;
-function handleAvatarPhoto(e){
+async function handleAvatarPhoto(e){
   const file = e.target.files[0];
   if(!file) return;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    pendingAvatarPhoto = ev.target.result;
+  try{
+    pendingAvatarPhoto = await fileToDataURL(file);
     profile.photo = pendingAvatarPhoto;
     renderProfile();
     saveProfileToServer({ photo: profile.photo });
-  };
-  reader.readAsDataURL(file);
+  } catch(err){ /* alert already shown inside fileToDataURL */ }
 }
 function openEditProfileSheet(){
   document.getElementById('ep-name').value = profile.displayName || '';
@@ -742,27 +910,27 @@ function renderPhotoGrid(){
   }
   grid.innerHTML = html;
 }
-function handleNewPhoto(e){
+async function handleNewPhoto(e){
   const file = e.target.files[0];
   if(!file || pendingNewPhotos.length >= 4) return;
-  const reader = new FileReader();
-  reader.onload = ev => { pendingNewPhotos.push(ev.target.result); renderPhotoGrid(); };
-  reader.readAsDataURL(file);
+  try{
+    const dataUrl = await fileToDataURL(file);
+    pendingNewPhotos.push(dataUrl);
+    renderPhotoGrid();
+  } catch(err){ /* alert already shown inside fileToDataURL */ }
 }
 function removeNewPhoto(i){ pendingNewPhotos.splice(i, 1); renderPhotoGrid(); }
 function toggleGradeField(){
   const c = document.getElementById('nf-condition').value;
   document.getElementById('nf-grade-wrap').style.display = c === 'Raw' ? 'none' : 'block';
 }
-function handleCompScreenshot(e){
+async function handleCompScreenshot(e){
   const file = e.target.files[0];
   if(!file) return;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    pendingCompScreenshot = ev.target.result;
+  try{
+    pendingCompScreenshot = await fileToDataURL(file);
     document.getElementById('comp-photo-drop').innerHTML = `<img src="${pendingCompScreenshot}"><input type="file" accept="image/*" onchange="handleCompScreenshot(event)">`;
-  };
-  reader.readAsDataURL(file);
+  } catch(err){ /* alert already shown inside fileToDataURL */ }
 }
 async function submitNewListing(){
   const name = document.getElementById('nf-name').value.trim();
@@ -807,6 +975,100 @@ async function submitNewListing(){
 }
 
 /* ---------------- My Collection ---------------- */
+/* ---------------- Sellers dashboard ----------------
+   Real numbers, not estimates — computed from listings you've actually
+   marked as sold. There's no in-app payment processing yet, so "sold"
+   is a manual record you create yourself when a deal closes outside
+   the app (message, cash, however you actually got paid). */
+function openSellersPanel(){
+  renderSellersDashboard();
+  document.getElementById('sellers-panel').classList.add('open');
+}
+function closeSellersPanel(){ document.getElementById('sellers-panel').classList.remove('open'); }
+
+function renderSellersDashboard(){
+  const mine = listings.filter(l => l.sellerName === (profile.displayName || 'Collector'));
+  const active = mine.filter(l => l.status !== 'sold');
+  const sold = mine.filter(l => l.status === 'sold').sort((a,b) => new Date(b.soldAt) - new Date(a.soldAt));
+  const totalRevenue = sold.reduce((sum, l) => sum + (l.soldPrice || 0), 0);
+  const avgVsComp = sold.length
+    ? sold.reduce((sum, l) => sum + ((l.compPrice - (l.soldPrice || 0)) / l.compPrice * 100), 0) / sold.length
+    : null;
+
+  const el = document.getElementById('sellers-content');
+  el.innerHTML = `
+    <div class="seller-stats-row">
+      <div class="seller-stat-card wide">
+        <div class="ssc-label">Total money made</div>
+        <div class="ssc-value">$${totalRevenue.toFixed(2)}</div>
+      </div>
+      <div class="seller-stat-card">
+        <div class="ssc-label">Active listings</div>
+        <div class="ssc-value">${active.length}</div>
+      </div>
+      <div class="seller-stat-card">
+        <div class="ssc-label">Orders (sold)</div>
+        <div class="ssc-value">${sold.length}</div>
+      </div>
+      ${avgVsComp !== null ? `
+      <div class="seller-stat-card wide" style="background:var(--violet-soft);">
+        <div class="ssc-label" style="color:var(--ink-soft);">Avg sold price vs comp</div>
+        <div class="ssc-value" style="color:var(--violet);">${avgVsComp >= 0 ? '-' : '+'}${Math.abs(avgVsComp).toFixed(0)}%</div>
+      </div>` : ''}
+    </div>
+
+    <div class="section-label">Active listings</div>
+    ${active.length === 0 ? `<div class="empty-collection">Nothing active right now.</div>` : active.map(item => {
+      const photos = item.photos && item.photos.length ? item.photos : (item.photo ? [item.photo] : []);
+      return `<div class="seller-order-row">
+        <div class="so-thumb">${photos[0] ? `<img src="${photos[0]}">` : ''}</div>
+        <div class="so-meta">
+          <div class="so-name">${item.name}</div>
+          <div class="so-sub">Listed $${item.price.toFixed(2)} · comp $${item.compPrice.toFixed(2)}</div>
+        </div>
+        <button class="mark-sold-btn" onclick="markListingSold('${item.id}')">Mark sold</button>
+      </div>`;
+    }).join('')}
+
+    <div class="section-label" style="margin-top:18px;">Order history</div>
+    ${sold.length === 0 ? `<div class="empty-collection">No sales yet.</div>` : sold.map(item => {
+      const photos = item.photos && item.photos.length ? item.photos : (item.photo ? [item.photo] : []);
+      const soldDate = item.soldAt ? new Date(item.soldAt).toLocaleDateString() : '';
+      return `<div class="seller-order-row">
+        <div class="so-thumb">${photos[0] ? `<img src="${photos[0]}">` : ''}</div>
+        <div class="so-meta">
+          <div class="so-name">${item.name}</div>
+          <div class="so-sub">Sold ${soldDate}${item.buyerName ? ' · to ' + item.buyerName : ''}</div>
+        </div>
+        <div class="so-price">$${(item.soldPrice || 0).toFixed(2)}</div>
+      </div>`;
+    }).join('')}
+  `;
+}
+
+async function markListingSold(id){
+  const listing = listings.find(l => l.id === id);
+  if(!listing) return;
+  const input = prompt(`What did "${listing.name}" actually sell for?`, listing.price);
+  if(input === null) return; // cancelled
+  const soldPrice = Number(input);
+  if(!soldPrice || soldPrice <= 0){ alert('Enter a valid sale price.'); return; }
+  const buyerName = prompt('Buyer name (optional):', '') || null;
+  try{
+    const res = await fetch(`${PROXY_BASE}/api/listings/${id}/sold`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ soldPrice, buyerName }),
+    });
+    const updated = await res.json();
+    const idx = listings.findIndex(l => l.id === id);
+    if(idx >= 0) listings[idx] = updated;
+    renderSellersDashboard();
+    renderProfile();
+  } catch(e){
+    alert("Couldn't reach your server — make sure it's running, then try again.");
+  }
+}
+
 function openCollectionPanel(){
   renderCollectionGrid();
   document.getElementById('collection-panel').classList.add('open');
@@ -856,12 +1118,14 @@ function renderCollectionPhotoGrid(){
   }
   grid.innerHTML = html;
 }
-function handleCollectionPhoto(e){
+async function handleCollectionPhoto(e){
   const file = e.target.files[0];
   if(!file || pendingCollectionPhotos.length >= 4) return;
-  const reader = new FileReader();
-  reader.onload = ev => { pendingCollectionPhotos.push(ev.target.result); renderCollectionPhotoGrid(); };
-  reader.readAsDataURL(file);
+  try{
+    const dataUrl = await fileToDataURL(file);
+    pendingCollectionPhotos.push(dataUrl);
+    renderCollectionPhotoGrid();
+  } catch(err){ /* alert already shown inside fileToDataURL */ }
 }
 function removeCollectionPhoto(i){ pendingCollectionPhotos.splice(i, 1); renderCollectionPhotoGrid(); }
 function toggleCollectionGradeField(){
@@ -986,6 +1250,11 @@ async function startOrOpenThread(contactName, listingName, listingId, firstMessa
 }
 
 /* ---------------- startup ---------------- */
+async function reloadListings(){
+  await loadListings();
+  renderMarketplaceFeed();
+}
+
 async function init(){
   await Promise.all([loadProfile(), loadListings(), loadCollection(), loadMessages()]);
   renderMarketplaceFeed();
