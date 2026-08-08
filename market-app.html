@@ -147,14 +147,19 @@
   .stat-pill{font-family:'Inter',sans-serif;font-size:11px;color:var(--ink-soft);background:var(--violet-soft);padding:3px 9px;border-radius:20px;}
   .stat-pill b{color:var(--violet);}
 
-  .entry-btn{
-    width:100%; display:flex; align-items:center; justify-content:space-between;
+  .entry-row{ display:flex; gap:10px; margin-bottom:20px; }
+  .entry-tile{
+    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
     background:var(--surface); border:1px solid var(--line); color:var(--ink);
-    font-family:'Poppins',sans-serif; font-weight:600; font-size:13.5px;
-    padding:13px 16px; border-radius:14px; cursor:pointer; margin-bottom:12px;
+    font-family:'Poppins',sans-serif; font-weight:600; font-size:11px; text-align:center;
+    padding:16px 6px; border-radius:16px; cursor:pointer; position:relative;
     box-shadow:0 4px 14px -8px rgba(33,28,51,0.15);
   }
-  .entry-badge{ background:var(--pass); color:#fff; font-size:10px; font-weight:700; border-radius:20px; padding:2px 8px; }
+  .entry-tile svg{ width:22px; height:22px; color:var(--violet); }
+  .entry-badge{
+    position:absolute; top:8px; right:8px;
+    background:var(--pass); color:#fff; font-size:9.5px; font-weight:700; border-radius:20px; padding:2px 7px;
+  }
   .list-card-btn{
     width:100%;background:linear-gradient(120deg, var(--grad3), var(--grad1));color:#fff;border:none;
     font-family:'Poppins',sans-serif;font-weight:600;font-size:14px;padding:14px;border-radius:16px;
@@ -798,17 +803,22 @@ function renderProfile(){
       </div>
     </div>
     ${profile.bio ? `<div class="profile-bio">${profile.bio}</div>` : `<button class="add-bio-btn" onclick="openEditProfileSheet()">+ Add a bio</button>`}
-    <button class="entry-btn" onclick="openSellersPanel()">
-      <span>Sellers</span>
-    </button>
-    <button class="entry-btn" onclick="openCollectionPanel()">
-      <span>My Collection</span>
-      <span class="entry-badge" id="collection-count-badge" style="display:${collection.length ? 'inline-block' : 'none'};">${collection.length}</span>
-    </button>
-    <button class="entry-btn" onclick="openMessagesPanel()">
-      <span>Messages</span>
-      <span class="entry-badge" id="msg-count-badge" style="display:${threads.length ? 'inline-block' : 'none'};">${threads.length}</span>
-    </button>
+    <div class="entry-row">
+      <button class="entry-tile" onclick="openSellersPanel()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+        <span>Sellers</span>
+      </button>
+      <button class="entry-tile" onclick="openCollectionPanel()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8L12 3 3 8l9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8M12 13v8"/></svg>
+        <span>My Collection</span>
+        <span class="entry-badge" id="collection-count-badge" style="display:${collection.length ? 'inline-block' : 'none'};">${collection.length}</span>
+      </button>
+      <button class="entry-tile" onclick="openMessagesPanel()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        <span>Messages</span>
+        <span class="entry-badge" id="msg-count-badge" style="display:${threads.length ? 'inline-block' : 'none'};">${threads.length}</span>
+      </button>
+    </div>
     <button class="list-card-btn" onclick="openListSheet()">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
       List a new card
