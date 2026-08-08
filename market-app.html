@@ -99,6 +99,10 @@
   .mp-img img{width:100%;height:100%;object-fit:contain;}
   .mp-actions-row{display:flex;align-items:center;gap:14px;padding:12px 14px 0;}
   .mp-icon-btn{background:none;border:none;cursor:pointer;color:var(--ink);display:flex;align-items:center;gap:5px;font-family:'Inter',sans-serif;font-size:12px;font-weight:600;padding:0;}
+  .buy-now-btn{
+    margin-left:auto; background:var(--like); color:#fff; border:none; font-family:'Poppins',sans-serif;
+    font-weight:600; font-size:11.5px; padding:8px 14px; border-radius:100px; cursor:pointer;
+  }
   .mp-icon-btn.liked{color:var(--pass);}
   .mp-icon-btn svg{width:22px;height:22px;}
   .mp-body{padding:10px 14px 14px;}
@@ -539,6 +543,14 @@
     <div class="panel-scroll" id="account-content"></div>
   </div>
 
+  <div class="sheet-backdrop" id="buynow-backdrop" onclick="closeBuyNowSheet()"></div>
+  <div class="sheet" id="buynow-sheet">
+    <div class="sheet-handle"></div>
+    <h3 id="buynow-title">Buy It Now</h3>
+    <div class="sub" id="buynow-sub"></div>
+    <div id="buynow-body"></div>
+  </div>
+
 </div>
 
 <script>
@@ -735,6 +747,7 @@ function renderMarketplacePost(item){
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
           Message
         </button>` : `<span style="font-family:'Inter',sans-serif;font-size:11px;color:var(--ink-soft);">Your listing</span>`}
+        ${!isOwn ? `<button class="buy-now-btn" onclick="openBuyNowSheet('${item.id}')">Buy It Now</button>` : ''}
       </div>
       <div class="mp-body">
         <div class="mp-name">${item.name}</div>
@@ -810,6 +823,57 @@ function messageAboutListing(id){
   const item = listings.find(l => l.id === id);
   if(!item) return;
   startOrOpenThread(item.sellerName, item.name, item.id, `Hi! I'm interested in "${item.name}" — is it still available?`);
+}
+
+/* ---------------- Buy It Now ----------------
+   Real hand-off to the seller's own PayPal.Me link — Slab Market never
+   touches the payment. This is intentional: no money-transmitter
+   licensing burden, but also no dispute resolution or refund authority
+   on our end, which is why the sheet says so plainly before sending
+   anyone to pay. */
+let buyNowItem = null;
+
+function openBuyNowSheet(id){
+  const item = listings.find(l => l.id === id);
+  if(!item) return;
+  buyNowItem = item;
+  document.getElementById('buynow-title').textContent = item.name.length > 50 ? item.name.slice(0,50)+'…' : item.name;
+  document.getElementById('buynow-sub').textContent = `$${Number(item.price).toFixed(2)} · seller: ${item.sellerName}`;
+
+  const body = document.getElementById('buynow-body');
+  if(item.sellerPaypalUsername){
+    body.innerHTML = `
+      <div class="auth-error" style="background:var(--violet-soft);color:var(--ink);">
+        You'll pay <b>${item.sellerName}</b> directly through PayPal. Slab Market doesn't process this payment and can't help with refunds or disputes if something goes wrong.
+        <br><br>
+        For buyer protection, choose <b>"Goods & Services"</b> on PayPal, not "Friends & Family" — Friends & Family payments can't be reversed if the card never arrives.
+      </div>
+      <button class="send-btn" onclick="confirmBuyNow()">Continue to PayPal</button>
+    `;
+  } else {
+    body.innerHTML = `
+      <div class="auth-error">This seller hasn't added a PayPal.Me link to their account yet, so Buy It Now isn't available for this listing. Message them instead to arrange payment.</div>
+      <button class="send-btn" onclick="closeBuyNowSheet(); messageAboutListing('${item.id}');">Message seller instead</button>
+    `;
+  }
+  document.getElementById('buynow-backdrop').classList.add('open');
+  document.getElementById('buynow-sheet').classList.add('open');
+}
+function closeBuyNowSheet(){
+  document.getElementById('buynow-backdrop').classList.remove('open');
+  document.getElementById('buynow-sheet').classList.remove('open');
+  buyNowItem = null;
+}
+function confirmBuyNow(){
+  if(!buyNowItem) return;
+  const price = Number(buyNowItem.price).toFixed(2);
+  const url = `https://paypal.me/${encodeURIComponent(buyNowItem.sellerPaypalUsername)}/${price}USD`;
+  window.open(url, '_blank');
+  // Leaves a record in Messages so there's a paper trail of the attempt —
+  // doesn't confirm payment actually happened, just that it was started.
+  startOrOpenThread(buyNowItem.sellerName, buyNowItem.name, buyNowItem.id,
+    `I just started a Buy It Now for "${buyNowItem.name}" at $${price} via PayPal.`);
+  closeBuyNowSheet();
 }
 
 /* ---------------- profile ---------------- */
@@ -988,6 +1052,7 @@ async function submitNewListing(){
   const gradeVal = document.getElementById('nf-grade').value.trim();
   const payload = {
     sellerName: profile.displayName || 'Collector',
+    sellerPaypalUsername: (currentUser && currentUser.paypalUsername) || '',
     name,
     sport: document.getElementById('nf-sport').value,
     year: document.getElementById('nf-year').value,
@@ -1060,6 +1125,9 @@ function renderAccountPanel(){
       <div class="account-info-row"><div class="air-label">Username</div><div class="air-value">${currentUser.username}</div></div>
       <div class="form-field"><label>Email</label><input type="email" id="acc-email" value="${currentUser.email || ''}" placeholder="you@example.com"></div>
       <div class="form-field"><label>Shipping address</label><textarea id="acc-shipping" rows="3" placeholder="Street, city, state, ZIP">${currentUser.shippingAddress || ''}</textarea></div>
+      <div class="form-field"><label>PayPal.Me username</label><input type="text" id="acc-paypal" value="${currentUser.paypalUsername || ''}" placeholder="e.g. yourname (from paypal.me/yourname)">
+        <div style="font-family:'Inter',sans-serif;font-size:10.5px;color:var(--ink-soft);margin-top:5px;">Buyers use this to pay you directly through PayPal — required for your listings to show a "Buy It Now" button. Don't have one? Create it free at paypal.me.</div>
+      </div>
       <button class="send-btn" onclick="saveAccountDetails()">Save changes</button>
       <button class="logout-btn" onclick="submitLogout()">Log out</button>
     `;
@@ -1135,10 +1203,15 @@ async function submitRegister(){
 async function saveAccountDetails(){
   const email = document.getElementById('acc-email').value.trim();
   const shippingAddress = document.getElementById('acc-shipping').value.trim();
+  const paypalUsername = document.getElementById('acc-paypal').value.trim()
+    .replace(/^@/, '')
+    .replace(/^(https?:\/\/)?(www\.)?paypal\.me\//i, '')
+    .split(/[/?]/)[0]
+    .trim();
   try{
     const res = await fetch(`${PROXY_BASE}/api/auth/me`, {
       method:'PUT', headers:{'Content-Type':'application/json', 'Authorization':'Bearer ' + authToken},
-      body: JSON.stringify({ email, shippingAddress }),
+      body: JSON.stringify({ email, shippingAddress, paypalUsername }),
     });
     const data = await res.json();
     if(res.ok){ currentUser = data.user; alert('Saved.'); }

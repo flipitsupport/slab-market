@@ -74,6 +74,7 @@ app.post('/api/listings', (req, res) => {
     id: 'listing-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
     createdAt: new Date().toISOString(),
     sellerName: req.body.sellerName || 'Collector',
+    sellerPaypalUsername: req.body.sellerPaypalUsername || '',
     name: req.body.name || 'Untitled card',
     sport: req.body.sport || '',
     team: req.body.team || '',
@@ -314,6 +315,7 @@ app.put('/api/auth/me', requireAuth, (req, res) => {
   if (!user) return res.status(404).json({ error: 'User not found' });
   if (typeof req.body.email === 'string') user.email = req.body.email;
   if (typeof req.body.shippingAddress === 'string') user.shippingAddress = req.body.shippingAddress;
+  if (typeof req.body.paypalUsername === 'string') user.paypalUsername = req.body.paypalUsername.trim();
   users[key] = user;
   writeJSON(USERS_FILE, users);
   res.json({ user: publicUser(user) });
