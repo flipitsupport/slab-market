@@ -214,11 +214,16 @@
   /* messages */
   .thread-row{display:flex;gap:12px;align-items:center;background:var(--surface);border-radius:16px;
     padding:12px;margin-bottom:10px;cursor:pointer;box-shadow:0 4px 14px -8px rgba(33,28,51,0.15);}
+  .thread-row.urgent{border:1.5px solid var(--pass);box-shadow:0 4px 14px -6px rgba(179,69,61,0.35);}
   .thread-avatar{width:42px;height:42px;border-radius:50%;flex-shrink:0;
     background:linear-gradient(135deg, var(--grad3), var(--grad1));
     display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-family:'Poppins',sans-serif;}
   .thread-meta{flex:1;min-width:0;}
-  .thread-meta .tm-name{font-family:'Poppins',sans-serif;font-weight:600;font-size:13.5px;color:var(--ink);}
+  .thread-meta .tm-name{font-family:'Poppins',sans-serif;font-weight:600;font-size:13.5px;color:var(--ink);display:flex;align-items:center;gap:6px;}
+  .urgent-tag{background:var(--pass);color:#fff;font-family:'Inter',sans-serif;font-size:9px;font-weight:700;
+    padding:2px 7px;border-radius:20px;letter-spacing:0.3px;animation:urgentPulse 1.4s ease-in-out infinite;}
+  @keyframes urgentPulse{0%,100%{opacity:1;}50%{opacity:0.55;}}
+  .entry-badge.urgent-badge{background:var(--pass);animation:urgentPulse 1.4s ease-in-out infinite;}
   .thread-meta .tm-listing{font-size:10.5px;color:var(--violet);margin-top:1px;}
   .thread-meta .tm-last{font-size:11.5px;color:var(--ink-soft);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .empty-threads{text-align:center;color:var(--ink-soft);padding:60px 20px;font-size:13.5px;}
@@ -869,10 +874,11 @@ function confirmBuyNow(){
   const price = Number(buyNowItem.price).toFixed(2);
   const url = `https://paypal.me/${encodeURIComponent(buyNowItem.sellerPaypalUsername)}/${price}USD`;
   window.open(url, '_blank');
-  // Leaves a record in Messages so there's a paper trail of the attempt —
-  // doesn't confirm payment actually happened, just that it was started.
-  startOrOpenThread(buyNowItem.sellerName, buyNowItem.name, buyNowItem.id,
-    `I just started a Buy It Now for "${buyNowItem.name}" at $${price} via PayPal.`);
+  // Uses startUrgentThread (not startOrOpenThread) deliberately — opening a
+  // thread immediately marks it "seen," which would clear the urgent flag
+  // before the seller ever saw it, since it's the buyer's own action.
+  startUrgentThread(buyNowItem.sellerName, buyNowItem.name, buyNowItem.id,
+    `I just started a Buy It Now for "${buyNowItem.name}" at $${price} — sending via PayPal Goods & Services, please use that option (not Friends & Family) to receive it.`);
   closeBuyNowSheet();
 }
 
@@ -916,7 +922,7 @@ function renderProfile(){
       <button class="entry-tile" onclick="openMessagesPanel()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
         <span>Messages</span>
-        <span class="entry-badge" id="msg-count-badge" style="display:${threads.length ? 'inline-block' : 'none'};">${threads.length}</span>
+        <span class="entry-badge ${threads.some(t=>t.urgent) ? 'urgent-badge' : ''}" id="msg-count-badge" style="display:${threads.length ? 'inline-block' : 'none'};">${threads.some(t=>t.urgent) ? '!' : threads.length}</span>
       </button>
     </div>
     <button class="list-card-btn" onclick="openListSheet()">
@@ -1433,10 +1439,10 @@ function renderThreadList(){
   if(threads.length === 0){ el.innerHTML = `<div class="empty-threads">No messages yet. Tap "Message" on a Marketplace listing to start one.</div>`; return; }
   el.innerHTML = threads.map(t => {
     const last = t.messages[t.messages.length - 1];
-    return `<div class="thread-row" onclick="openThread('${t.id}')">
+    return `<div class="thread-row ${t.urgent ? 'urgent' : ''}" onclick="openThread('${t.id}')">
       <div class="thread-avatar">${initials(t.contactName)}</div>
       <div class="thread-meta">
-        <div class="tm-name">${t.contactName}</div>
+        <div class="tm-name">${t.contactName} ${t.urgent ? '<span class="urgent-tag">URGENT</span>' : ''}</div>
         ${t.listingName ? `<div class="tm-listing">Re: ${t.listingName}</div>` : ''}
         <div class="tm-last">${last ? last.text : ''}</div>
       </div>
@@ -1452,6 +1458,11 @@ function openThread(id){
   document.getElementById('msg-panel-title').textContent = thread.contactName;
   document.getElementById('msg-back-btn').onclick = backToThreadList;
   renderThreadChat(thread);
+  if(thread.urgent){
+    thread.urgent = false; // clear immediately in the UI
+    fetch(`${PROXY_BASE}/api/messages/${id}/seen`, { method: 'POST' }).catch(() => {});
+    if(document.getElementById('tab-profile').classList.contains('active')) renderProfile();
+  }
 }
 function backToThreadList(){
   activeThreadId = null;
@@ -1496,6 +1507,23 @@ async function startOrOpenThread(contactName, listingName, listingId, firstMessa
     if(idx >= 0) threads[idx] = thread; else threads.unshift(thread);
     openMessagesPanel();
     openThread(thread.id);
+  } catch(e){ alert("Couldn't reach your local server — make sure npm start is running."); }
+}
+
+// Same as above, but for the Buy It Now flow specifically: creates the
+// message flagged urgent, and deliberately does NOT navigate into the
+// thread (which would immediately mark it seen and clear the flag before
+// the seller — a different device/session — ever saw it).
+async function startUrgentThread(contactName, listingName, listingId, firstMessage){
+  try{
+    const res = await fetch(`${PROXY_BASE}/api/messages`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ contactName, listingName, listingId, text: firstMessage, urgent: true }),
+    });
+    const thread = await res.json();
+    const idx = threads.findIndex(t => t.id === thread.id);
+    if(idx >= 0) threads[idx] = thread; else threads.unshift(thread);
+    alert(`Sent — ${contactName} will see an urgent notification to expect your PayPal Goods & Services payment.`);
   } catch(e){ alert("Couldn't reach your local server — make sure npm start is running."); }
 }
 

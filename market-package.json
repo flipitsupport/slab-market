@@ -1,17 +1,10 @@
 {
-  "name": "slab-market",
-  "version": "1.0.0",
-  "description": "Instagram-style sports card marketplace with comp-based ranking",
-  "main": "server.js",
-  "type": "commonjs",
-  "scripts": {
-    "start": "node server.js"
-  },
-  "engines": {
-    "node": ">=18"
-  },
   "dependencies": {
-    "cors": "^2.8.5",
-    "express": "^4.19.2"
+    "@supabase/supabase-js": "^2.112.4",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "heic-convert": "^2.1.0"
   }
 }

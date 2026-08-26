@@ -1,217 +1,249 @@
 /**
- * Slab Market — backend
- * ----------------------
- * No eBay, no external API calls at all. This just serves the app file
- * and stores your data (profile, listings, collection, messages) as
- * simple JSON files on this computer. On one local server, there's only
- * one real user — you — but the storage model works the same way once
- * this is hosted somewhere multiple people can reach it.
+ * Slab Market / Flipit — backend, now backed by Supabase Postgres
+ * ------------------------------------------------------------------
+ * Every route keeps the exact same URL, method, and response shape as
+ * before — the frontend (market-app.html) needs ZERO changes. All
+ * that changed is where the data actually lives: a real hosted
+ * Postgres database instead of JSON files that vanished every time
+ * Render restarted the server.
+ *
+ * Required environment variables (set these on Render, and in a local
+ * .env file for testing — see the setup instructions):
+ *   SUPABASE_URL           - your project's URL (Settings -> API)
+ *   SUPABASE_SERVICE_KEY   - your project's service_role secret key
  */
 
+require('dotenv').config();
 const express = require('express');
+const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const heicConvert = require('heic-convert');
-const cors = require('cors');
-const fs = require('fs');
-const path = require('path');
+const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 app.use(cors());
-app.use(express.static(__dirname)); // serves market-app.html directly
-app.use(express.json({ limit: '20mb' })); // room for a few photos per listing
+app.use(express.static(__dirname));
+app.use(express.json({ limit: '20mb' }));
 
 const PORT = process.env.PORT || 3001;
-const DATA_DIR = __dirname;
 
-const PROFILE_FILE = path.join(DATA_DIR, 'profile.json');
-const LISTINGS_FILE = path.join(DATA_DIR, 'listings.json');
-const COLLECTION_FILE = path.join(DATA_DIR, 'collection.json');
-const MESSAGES_FILE = path.join(DATA_DIR, 'messages.json');
-const USERS_FILE = path.join(DATA_DIR, 'users.json');
-const SESSIONS_FILE = path.join(DATA_DIR, 'sessions.json');
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
+  console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_KEY environment variables.');
+  console.error('Set these before starting the server -- see schema.sql setup instructions.');
+}
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
-function readJSON(file, fallback) {
+// Small helper: Supabase calls return { data, error } -- this throws on
+// error so route handlers can just try/catch instead of checking twice.
+async function sb(promise) {
+  const { data, error } = await promise;
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+function newId(prefix) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+/* ---------------- device profile (pre-login fallback identity) ---------------- */
+app.get('/api/profile', async (req, res) => {
   try {
-    if (!fs.existsSync(file)) return fallback;
-    return JSON.parse(fs.readFileSync(file, 'utf8'));
-  } catch (e) {
-    console.error(`Couldn't read ${file}:`, e.message);
-    return fallback;
-  }
-}
-function writeJSON(file, data) {
-  fs.writeFileSync(file, JSON.stringify(data, null, 2));
-}
-
-/* ---------------- profile ---------------- */
-app.get('/api/profile', (req, res) => {
-  res.json(readJSON(PROFILE_FILE, { displayName: 'Collector', createdAt: new Date().toISOString() }));
+    const rows = await sb(supabase.from('legacy_profile').select('*').eq('id', 1));
+    const row = rows[0] || { display_name: 'Collector', bio: '', photo: '' };
+    res.json({ displayName: row.display_name, bio: row.bio, photo: row.photo });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
-app.post('/api/profile', (req, res) => {
-  const current = readJSON(PROFILE_FILE, {});
-  const updated = { ...current, ...req.body };
-  writeJSON(PROFILE_FILE, updated);
-  res.json(updated);
+app.post('/api/profile', async (req, res) => {
+  try {
+    const update = {};
+    if (typeof req.body.displayName === 'string') update.display_name = req.body.displayName;
+    if (typeof req.body.bio === 'string') update.bio = req.body.bio;
+    if (typeof req.body.photo === 'string') update.photo = req.body.photo;
+    const rows = await sb(supabase.from('legacy_profile').update(update).eq('id', 1).select());
+    const row = rows[0];
+    res.json({ displayName: row.display_name, bio: row.bio, photo: row.photo });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-/* ---------------- listings (the Marketplace feed) ----------------
-   Every listing requires comp proof (a screenshot + claimed sold price)
-   at creation time. Ranking in the feed is based on how far below that
-   comp a listing is priced. Since there's no automated way to verify a
-   sold price without a licensed sold-comps API, the community rates
-   each listing's screenshot 1-5 stars — that's the trust mechanism. */
-app.get('/api/listings', (req, res) => {
-  res.json(readJSON(LISTINGS_FILE, []));
-});
-app.post('/api/listings', (req, res) => {
-  const listings = readJSON(LISTINGS_FILE, []);
-  const photos = Array.isArray(req.body.photos) ? req.body.photos.slice(0, 4) : (req.body.photo ? [req.body.photo] : []);
-  if (!req.body.compScreenshot || !req.body.compPrice) {
-    return res.status(400).json({ error: 'Comp proof (screenshot + sold price) is required to list a card.' });
-  }
-  const listing = {
-    id: 'listing-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
-    createdAt: new Date().toISOString(),
-    sellerName: req.body.sellerName || 'Collector',
-    sellerPaypalUsername: req.body.sellerPaypalUsername || '',
-    name: req.body.name || 'Untitled card',
-    sport: req.body.sport || '',
-    team: req.body.team || '',
-    year: req.body.year || '',
-    price: Number(req.body.price) || 0,
-    condition: req.body.condition || 'Raw',
-    grade: req.body.grade || 'Raw',
-    details: req.body.details || '',
-    photos,
-    photo: photos[0] || null,
-    compPrice: Number(req.body.compPrice),
-    compScreenshot: req.body.compScreenshot,
-    ratings: [],
-    status: 'active', // 'active' | 'sold'
-    soldPrice: null,
-    soldAt: null,
-    buyerName: null,
+/* ---------------- listings (Marketplace feed) ---------------- */
+function listingOut(row) {
+  return {
+    id: row.id, sellerName: row.seller_name, sellerPaypalUsername: row.seller_paypal_username,
+    name: row.name, sport: row.sport, team: row.team, year: row.year,
+    price: Number(row.price), condition: row.condition, grade: row.grade, details: row.details,
+    photos: row.photos || [], photo: row.photo,
+    compPrice: Number(row.comp_price), compScreenshot: row.comp_screenshot,
+    ratings: row.ratings || [], status: row.status,
+    soldPrice: row.sold_price !== null ? Number(row.sold_price) : null,
+    soldAt: row.sold_at, buyerName: row.buyer_name, createdAt: row.created_at,
   };
-  listings.unshift(listing);
-  writeJSON(LISTINGS_FILE, listings);
-  res.json(listing);
-});
-app.post('/api/listings/:id/rate', (req, res) => {
-  const listings = readJSON(LISTINGS_FILE, []);
-  const listing = listings.find(l => l.id === req.params.id);
-  if (!listing) return res.status(404).json({ error: 'Listing not found' });
-  const stars = Number(req.body.stars);
-  if (!stars || stars < 1 || stars > 5) {
-    return res.status(400).json({ error: 'stars must be 1-5' });
-  }
-  if (!Array.isArray(listing.ratings)) listing.ratings = [];
-  listing.ratings.push({ stars, ts: new Date().toISOString() });
-  writeJSON(LISTINGS_FILE, listings);
-  res.json(listing);
-});
-app.delete('/api/listings/:id', (req, res) => {
-  const listings = readJSON(LISTINGS_FILE, []);
-  const next = listings.filter(l => l.id !== req.params.id);
-  writeJSON(LISTINGS_FILE, next);
-  res.json({ deleted: listings.length !== next.length });
+}
+
+app.get('/api/listings', async (req, res) => {
+  try {
+    const rows = await sb(supabase.from('listings').select('*').order('created_at', { ascending: false }));
+    res.json(rows.map(listingOut));
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Seller marks their own listing as sold — this is what actually powers
-// the Sellers dashboard's order history and revenue total. There's no
-// in-app payment processing yet, so this is a manual record, not an
-// automated transaction.
-app.post('/api/listings/:id/sold', (req, res) => {
-  const listings = readJSON(LISTINGS_FILE, []);
-  const listing = listings.find(l => l.id === req.params.id);
-  if (!listing) return res.status(404).json({ error: 'Listing not found' });
-  listing.status = 'sold';
-  listing.soldPrice = req.body.soldPrice ? Number(req.body.soldPrice) : listing.price;
-  listing.soldAt = new Date().toISOString();
-  listing.buyerName = req.body.buyerName || null;
-  writeJSON(LISTINGS_FILE, listings);
-  res.json(listing);
+app.post('/api/listings', async (req, res) => {
+  try {
+    const photos = Array.isArray(req.body.photos) ? req.body.photos.slice(0, 4) : (req.body.photo ? [req.body.photo] : []);
+    if (!req.body.compScreenshot || !req.body.compPrice) {
+      return res.status(400).json({ error: 'Comp proof (screenshot + sold price) is required to list a card.' });
+    }
+    const row = {
+      id: newId('listing'),
+      seller_name: req.body.sellerName || 'Collector',
+      seller_paypal_username: req.body.sellerPaypalUsername || '',
+      name: req.body.name || 'Untitled card',
+      sport: req.body.sport || '', team: req.body.team || '', year: req.body.year || '',
+      price: Number(req.body.price) || 0, condition: req.body.condition || 'Raw', grade: req.body.grade || 'Raw',
+      details: req.body.details || '', photos, photo: photos[0] || null,
+      comp_price: Number(req.body.compPrice), comp_screenshot: req.body.compScreenshot,
+      ratings: [], status: 'active',
+    };
+    const rows = await sb(supabase.from('listings').insert(row).select());
+    res.json(listingOut(rows[0]));
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-/* ---------------- My Collection (cards you own, not for sale) ---------------- */
-app.get('/api/collection', (req, res) => {
-  res.json(readJSON(COLLECTION_FILE, []));
+app.post('/api/listings/:id/rate', async (req, res) => {
+  try {
+    const stars = Number(req.body.stars);
+    if (!stars || stars < 1 || stars > 5) return res.status(400).json({ error: 'stars must be 1-5' });
+    const existing = await sb(supabase.from('listings').select('ratings').eq('id', req.params.id));
+    if (!existing[0]) return res.status(404).json({ error: 'Listing not found' });
+    const ratings = [...(existing[0].ratings || []), { stars, ts: new Date().toISOString() }];
+    const rows = await sb(supabase.from('listings').update({ ratings }).eq('id', req.params.id).select());
+    res.json(listingOut(rows[0]));
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
-app.post('/api/collection', (req, res) => {
-  const items = readJSON(COLLECTION_FILE, []);
-  const photos = Array.isArray(req.body.photos) ? req.body.photos.slice(0, 4) : (req.body.photo ? [req.body.photo] : []);
-  const item = {
-    id: 'coll-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
-    createdAt: new Date().toISOString(),
-    name: req.body.name || 'Untitled card',
-    sport: req.body.sport || '',
-    team: req.body.team || '',
-    year: req.body.year || '',
-    pricePaid: Number(req.body.pricePaid) || 0,
-    condition: req.body.condition || 'Raw',
-    grade: req.body.grade || 'Raw',
-    details: req.body.details || '',
-    photos,
-    photo: photos[0] || null,
+
+app.post('/api/listings/:id/sold', async (req, res) => {
+  try {
+    const existing = await sb(supabase.from('listings').select('price').eq('id', req.params.id));
+    if (!existing[0]) return res.status(404).json({ error: 'Listing not found' });
+    const update = {
+      status: 'sold',
+      sold_price: req.body.soldPrice ? Number(req.body.soldPrice) : existing[0].price,
+      sold_at: new Date().toISOString(),
+      buyer_name: req.body.buyerName || null,
+    };
+    const rows = await sb(supabase.from('listings').update(update).eq('id', req.params.id).select());
+    res.json(listingOut(rows[0]));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/listings/:id', async (req, res) => {
+  try {
+    const existing = await sb(supabase.from('listings').select('id').eq('id', req.params.id));
+    await sb(supabase.from('listings').delete().eq('id', req.params.id));
+    res.json({ deleted: existing.length > 0 });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+/* ---------------- My Collection ---------------- */
+function collectionOut(row) {
+  return {
+    id: row.id, name: row.name, sport: row.sport, team: row.team, year: row.year,
+    pricePaid: Number(row.price_paid), condition: row.condition, grade: row.grade, details: row.details,
+    photos: row.photos || [], photo: row.photo, createdAt: row.created_at,
   };
-  items.unshift(item);
-  writeJSON(COLLECTION_FILE, items);
-  res.json(item);
+}
+app.get('/api/collection', async (req, res) => {
+  try {
+    const rows = await sb(supabase.from('collection_items').select('*').order('created_at', { ascending: false }));
+    res.json(rows.map(collectionOut));
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
-app.delete('/api/collection/:id', (req, res) => {
-  const items = readJSON(COLLECTION_FILE, []);
-  const next = items.filter(i => i.id !== req.params.id);
-  writeJSON(COLLECTION_FILE, next);
-  res.json({ deleted: items.length !== next.length });
+app.post('/api/collection', async (req, res) => {
+  try {
+    const photos = Array.isArray(req.body.photos) ? req.body.photos.slice(0, 4) : (req.body.photo ? [req.body.photo] : []);
+    const row = {
+      id: newId('coll'), name: req.body.name || 'Untitled card', sport: req.body.sport || '',
+      team: req.body.team || '', year: req.body.year || '', price_paid: Number(req.body.pricePaid) || 0,
+      condition: req.body.condition || 'Raw', grade: req.body.grade || 'Raw', details: req.body.details || '',
+      photos, photo: photos[0] || null,
+    };
+    const rows = await sb(supabase.from('collection_items').insert(row).select());
+    res.json(collectionOut(rows[0]));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+app.delete('/api/collection/:id', async (req, res) => {
+  try {
+    const existing = await sb(supabase.from('collection_items').select('id').eq('id', req.params.id));
+    await sb(supabase.from('collection_items').delete().eq('id', req.params.id));
+    res.json({ deleted: existing.length > 0 });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 /* ---------------- messages ---------------- */
-app.get('/api/messages', (req, res) => {
-  res.json(readJSON(MESSAGES_FILE, []));
+function threadOut(row) {
+  return {
+    id: row.id, contactName: row.contact_name, listingName: row.listing_name, listingId: row.listing_id,
+    messages: row.messages || [], urgent: row.urgent, createdAt: row.created_at, updatedAt: row.updated_at,
+  };
+}
+app.get('/api/messages', async (req, res) => {
+  try {
+    const rows = await sb(supabase.from('message_threads').select('*').order('updated_at', { ascending: false }));
+    res.json(rows.map(threadOut));
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
-app.post('/api/messages', (req, res) => {
-  const threads = readJSON(MESSAGES_FILE, []);
-  const { threadId, contactName, listingName, listingId, text } = req.body;
-  if (!text || !text.trim()) {
-    return res.status(400).json({ error: 'Message text is required' });
-  }
-  let thread = threadId
-    ? threads.find(t => t.id === threadId)
-    : threads.find(t => t.listingId === listingId && t.contactName === contactName);
-  if (!thread) {
-    thread = {
-      id: 'thread-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
-      contactName: contactName || 'Collector',
-      listingName: listingName || '',
-      listingId: listingId || null,
-      messages: [],
-      createdAt: new Date().toISOString(),
-    };
-    threads.unshift(thread);
-  }
-  thread.messages.push({ from: 'me', text: text.trim(), ts: new Date().toISOString() });
-  thread.updatedAt = new Date().toISOString();
-  writeJSON(MESSAGES_FILE, threads);
-  res.json(thread);
+app.post('/api/messages', async (req, res) => {
+  try {
+    const { threadId, contactName, listingName, listingId, text, urgent } = req.body;
+    if (!text || !text.trim()) return res.status(400).json({ error: 'Message text is required' });
+
+    let existing = null;
+    if (threadId) {
+      const rows = await sb(supabase.from('message_threads').select('*').eq('id', threadId));
+      existing = rows[0] || null;
+    } else {
+      const rows = await sb(supabase.from('message_threads').select('*').eq('listing_id', listingId).eq('contact_name', contactName));
+      existing = rows[0] || null;
+    }
+
+    const newMessage = { from: 'me', text: text.trim(), ts: new Date().toISOString() };
+
+    if (existing) {
+      const messages = [...(existing.messages || []), newMessage];
+      const update = { messages, updated_at: new Date().toISOString() };
+      if (urgent) update.urgent = true;
+      const rows = await sb(supabase.from('message_threads').update(update).eq('id', existing.id).select());
+      res.json(threadOut(rows[0]));
+    } else {
+      const row = {
+        id: newId('thread'), contact_name: contactName || 'Collector', listing_name: listingName || '',
+        listing_id: listingId || null, messages: [newMessage], urgent: !!urgent, updated_at: new Date().toISOString(),
+      };
+      const rows = await sb(supabase.from('message_threads').insert(row).select());
+      res.json(threadOut(rows[0]));
+    }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
-app.delete('/api/messages/:id', (req, res) => {
-  const threads = readJSON(MESSAGES_FILE, []);
-  const next = threads.filter(t => t.id !== req.params.id);
-  writeJSON(MESSAGES_FILE, next);
-  res.json({ deleted: threads.length !== next.length });
+app.post('/api/messages/:id/seen', async (req, res) => {
+  try {
+    const rows = await sb(supabase.from('message_threads').update({ urgent: false }).eq('id', req.params.id).select());
+    if (!rows[0]) return res.status(404).json({ error: 'Thread not found' });
+    res.json(threadOut(rows[0]));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+app.delete('/api/messages/:id', async (req, res) => {
+  try {
+    const existing = await sb(supabase.from('message_threads').select('id').eq('id', req.params.id));
+    await sb(supabase.from('message_threads').delete().eq('id', req.params.id));
+    res.json({ deleted: existing.length > 0 });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-/* ---------------- HEIC/HEIF conversion ----------------
-   iPhones save photos as HEIC by default, which no browser can display.
-   Converting server-side with a real Node library is far more reliable
-   than any browser-based decoder — no CDN dependency, no waiting on a
-   script to load, and broader format support. */
+/* ---------------- HEIC/HEIF conversion (unchanged) ---------------- */
 app.post('/api/convert-heic', async (req, res) => {
   try {
     const { dataUrl } = req.body;
-    if (!dataUrl || !dataUrl.includes(',')) {
-      return res.status(400).json({ error: 'Missing image data' });
-    }
+    if (!dataUrl || !dataUrl.includes(',')) return res.status(400).json({ error: 'Missing image data' });
     const base64 = dataUrl.split(',')[1];
     const inputBuffer = Buffer.from(base64, 'base64');
     const outputBuffer = await heicConvert({ buffer: inputBuffer, format: 'JPEG', quality: 0.85 });
@@ -223,102 +255,95 @@ app.post('/api/convert-heic', async (req, res) => {
 });
 
 /* ---------------- accounts / authentication ----------------
-   Real accounts: username + password (hashed with bcrypt, never stored
-   or returned in plain text), email, and a shipping address. Sessions
-   are a random token mapped to a username, sent by the client as
-   "Authorization: Bearer <token>" on requests that need to know who's
-   logged in. Like everything else in this app right now, this data
-   lives in a JSON file on this server — it survives restarts only if
-   a persistent disk is attached (same caveat as your listings data). */
-
-function findSession(token) {
-  const sessions = readJSON(SESSIONS_FILE, {});
-  return sessions[token] || null;
+   Same bcrypt + random-token session design as before -- only the
+   storage moved to Supabase tables instead of JSON files. */
+async function findSession(token) {
+  const rows = await sb(supabase.from('sessions').select('username').eq('token', token));
+  return rows[0] ? rows[0].username : null;
 }
-function requireAuth(req, res, next) {
-  const authHeader = req.headers.authorization || '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  const username = token && findSession(token);
-  if (!username) return res.status(401).json({ error: 'Not logged in' });
-  req.username = username;
-  next();
+async function requireAuth(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    const username = token && await findSession(token);
+    if (!username) return res.status(401).json({ error: 'Not logged in' });
+    req.username = username;
+    next();
+  } catch (err) { res.status(500).json({ error: err.message }); }
 }
 function publicUser(user) {
-  const { passwordHash, ...rest } = user;
-  return rest;
+  return {
+    username: user.username, email: user.email, shippingAddress: user.shipping_address,
+    paypalUsername: user.paypal_username, createdAt: user.created_at,
+  };
 }
 
-app.post('/api/auth/register', (req, res) => {
-  const { username, password, email, shippingAddress } = req.body;
-  if (!username || !username.trim() || !password || password.length < 6) {
-    return res.status(400).json({ error: 'Username is required and password must be at least 6 characters.' });
-  }
-  const users = readJSON(USERS_FILE, {});
-  const key = username.trim().toLowerCase();
-  if (users[key]) {
-    return res.status(409).json({ error: 'That username is already taken.' });
-  }
-  const user = {
-    username: username.trim(),
-    passwordHash: bcrypt.hashSync(password, 10),
-    email: email || '',
-    shippingAddress: shippingAddress || '',
-    createdAt: new Date().toISOString(),
-  };
-  users[key] = user;
-  writeJSON(USERS_FILE, users);
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { username, password, email, shippingAddress } = req.body;
+    if (!username || !username.trim() || !password || password.length < 6) {
+      return res.status(400).json({ error: 'Username is required and password must be at least 6 characters.' });
+    }
+    const key = username.trim().toLowerCase();
+    const existing = await sb(supabase.from('users').select('username').eq('username', key));
+    if (existing.length > 0) return res.status(409).json({ error: 'That username is already taken.' });
 
-  const token = crypto.randomBytes(24).toString('hex');
-  const sessions = readJSON(SESSIONS_FILE, {});
-  sessions[token] = user.username;
-  writeJSON(SESSIONS_FILE, sessions);
+    const row = {
+      username: key, password_hash: bcrypt.hashSync(password, 10),
+      email: email || '', shipping_address: shippingAddress || '',
+    };
+    const rows = await sb(supabase.from('users').insert(row).select());
+    const user = rows[0];
 
-  res.json({ token, user: publicUser(user) });
+    const token = crypto.randomBytes(24).toString('hex');
+    await sb(supabase.from('sessions').insert({ token, username: user.username }));
+    res.json({ token, user: publicUser({ ...user, username: username.trim() }) });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.post('/api/auth/login', (req, res) => {
-  const { username, password } = req.body;
-  if (!username || !password) return res.status(400).json({ error: 'Username and password are required.' });
-  const users = readJSON(USERS_FILE, {});
-  const key = username.trim().toLowerCase();
-  const user = users[key];
-  if (!user || !bcrypt.compareSync(password, user.passwordHash)) {
-    return res.status(401).json({ error: 'Incorrect username or password.' });
-  }
-  const token = crypto.randomBytes(24).toString('hex');
-  const sessions = readJSON(SESSIONS_FILE, {});
-  sessions[token] = user.username;
-  writeJSON(SESSIONS_FILE, sessions);
-  res.json({ token, user: publicUser(user) });
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ error: 'Username and password are required.' });
+    const key = username.trim().toLowerCase();
+    const rows = await sb(supabase.from('users').select('*').eq('username', key));
+    const user = rows[0];
+    if (!user || !bcrypt.compareSync(password, user.password_hash)) {
+      return res.status(401).json({ error: 'Incorrect username or password.' });
+    }
+    const token = crypto.randomBytes(24).toString('hex');
+    await sb(supabase.from('sessions').insert({ token, username: user.username }));
+    res.json({ token, user: publicUser(user) });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.post('/api/auth/logout', requireAuth, (req, res) => {
-  const authHeader = req.headers.authorization || '';
-  const token = authHeader.slice(7);
-  const sessions = readJSON(SESSIONS_FILE, {});
-  delete sessions[token];
-  writeJSON(SESSIONS_FILE, sessions);
-  res.json({ loggedOut: true });
+app.post('/api/auth/logout', requireAuth, async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.slice(7);
+    await sb(supabase.from('sessions').delete().eq('token', token));
+    res.json({ loggedOut: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.get('/api/auth/me', requireAuth, (req, res) => {
-  const users = readJSON(USERS_FILE, {});
-  const user = users[req.username.toLowerCase()];
-  if (!user) return res.status(404).json({ error: 'User not found' });
-  res.json({ user: publicUser(user) });
+app.get('/api/auth/me', requireAuth, async (req, res) => {
+  try {
+    const rows = await sb(supabase.from('users').select('*').eq('username', req.username));
+    if (!rows[0]) return res.status(404).json({ error: 'User not found' });
+    res.json({ user: publicUser(rows[0]) });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.put('/api/auth/me', requireAuth, (req, res) => {
-  const users = readJSON(USERS_FILE, {});
-  const key = req.username.toLowerCase();
-  const user = users[key];
-  if (!user) return res.status(404).json({ error: 'User not found' });
-  if (typeof req.body.email === 'string') user.email = req.body.email;
-  if (typeof req.body.shippingAddress === 'string') user.shippingAddress = req.body.shippingAddress;
-  if (typeof req.body.paypalUsername === 'string') user.paypalUsername = req.body.paypalUsername.trim();
-  users[key] = user;
-  writeJSON(USERS_FILE, users);
-  res.json({ user: publicUser(user) });
+app.put('/api/auth/me', requireAuth, async (req, res) => {
+  try {
+    const update = {};
+    if (typeof req.body.email === 'string') update.email = req.body.email;
+    if (typeof req.body.shippingAddress === 'string') update.shipping_address = req.body.shippingAddress;
+    if (typeof req.body.paypalUsername === 'string') update.paypal_username = req.body.paypalUsername.trim();
+    const rows = await sb(supabase.from('users').update(update).eq('username', req.username).select());
+    if (!rows[0]) return res.status(404).json({ error: 'User not found' });
+    res.json({ user: publicUser(rows[0]) });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.listen(PORT, () => console.log(`Slab Market server running on http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`Flipit server running on http://localhost:${PORT} (Supabase-backed)`));
