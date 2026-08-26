@@ -274,7 +274,8 @@ async function requireAuth(req, res, next) {
 function publicUser(user) {
   return {
     username: user.username, email: user.email, shippingAddress: user.shipping_address,
-    paypalUsername: user.paypal_username, createdAt: user.created_at,
+    paypalUsername: user.paypal_username, bio: user.bio || '', photo: user.photo || '',
+    createdAt: user.created_at,
   };
 }
 
@@ -340,6 +341,12 @@ app.put('/api/auth/me', requireAuth, async (req, res) => {
     if (typeof req.body.email === 'string') update.email = req.body.email;
     if (typeof req.body.shippingAddress === 'string') update.shipping_address = req.body.shippingAddress;
     if (typeof req.body.paypalUsername === 'string') update.paypal_username = req.body.paypalUsername.trim();
+    if (typeof req.body.bio === 'string') update.bio = req.body.bio;
+    if (typeof req.body.photo === 'string') update.photo = req.body.photo;
+    if (Object.keys(update).length === 0) {
+      const rows = await sb(supabase.from('users').select('*').eq('username', req.username));
+      return res.json({ user: publicUser(rows[0]) });
+    }
     const rows = await sb(supabase.from('users').update(update).eq('username', req.username).select());
     if (!rows[0]) return res.status(404).json({ error: 'User not found' });
     res.json({ user: publicUser(rows[0]) });

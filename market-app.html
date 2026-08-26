@@ -486,7 +486,7 @@
     <div class="sheet-handle"></div>
     <h3>Edit profile</h3>
     <div class="sub">Saved on this device's server, visible on your profile.</div>
-    <div class="form-field"><label>Display name</label><input type="text" id="ep-name" placeholder="Collector"></div>
+    <div class="form-field" id="ep-name-wrap"><label>Display name</label><input type="text" id="ep-name" placeholder="Collector"></div>
     <div class="form-field"><label>Bio</label><textarea id="ep-bio" rows="3" placeholder="What do you collect? What are you looking for?"></textarea></div>
     <button class="send-btn" onclick="saveProfileEdits()">Save profile</button>
   </div>
@@ -978,6 +978,7 @@ async function handleAvatarPhoto(e){
 function openEditProfileSheet(){
   document.getElementById('ep-name').value = profile.displayName || '';
   document.getElementById('ep-bio').value = profile.bio || '';
+  document.getElementById('ep-name-wrap').style.display = currentUser ? 'none' : 'block';
   document.getElementById('edit-profile-backdrop').classList.add('open');
   document.getElementById('edit-profile-sheet').classList.add('open');
 }
@@ -986,17 +987,34 @@ function closeEditProfileSheet(){
   document.getElementById('edit-profile-sheet').classList.remove('open');
 }
 async function saveProfileEdits(){
-  const name = document.getElementById('ep-name').value.trim();
   const bio = document.getElementById('ep-bio').value.trim();
-  profile.displayName = name || 'Collector';
   profile.bio = bio;
-  closeEditProfileSheet();
-  renderProfile();
-  await saveProfileToServer({ displayName: profile.displayName, bio: profile.bio });
+  if(currentUser){
+    closeEditProfileSheet();
+    renderProfile();
+    await saveProfileToServer({ bio });
+  } else {
+    const name = document.getElementById('ep-name').value.trim();
+    profile.displayName = name || 'Collector';
+    closeEditProfileSheet();
+    renderProfile();
+    await saveProfileToServer({ displayName: profile.displayName, bio: profile.bio });
+  }
 }
 async function saveProfileToServer(fields){
   try{
-    await fetch(`${PROXY_BASE}/api/profile`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(fields) });
+    if(currentUser && authToken){
+      // Logged in: save to THIS account's own row, not the shared anonymous
+      // slot every account used to accidentally read from.
+      const res = await fetch(`${PROXY_BASE}/api/auth/me`, {
+        method:'PUT', headers:{'Content-Type':'application/json', 'Authorization':'Bearer ' + authToken},
+        body: JSON.stringify(fields),
+      });
+      const data = await res.json();
+      if(res.ok) currentUser = data.user;
+    } else {
+      await fetch(`${PROXY_BASE}/api/profile`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(fields) });
+    }
   } catch(e){}
 }
 
@@ -1113,7 +1131,12 @@ async function loadCurrentUser(){
     if(!res.ok){ authToken = null; localStorage.removeItem('slabmarket_token'); return; }
     const data = await res.json();
     currentUser = data.user;
-    profile.displayName = currentUser.username; // ties your public identity to your real account
+    // Ties your public identity AND your avatar/bio to your real account —
+    // these used to come from one shared global slot every account read
+    // from, which is why one person's photo showed up on someone else's login.
+    profile.displayName = currentUser.username;
+    profile.bio = currentUser.bio || '';
+    profile.photo = currentUser.photo || '';
   } catch(e){ /* stay logged out locally if the server can't be reached */ }
 }
 
@@ -1233,7 +1256,9 @@ async function submitLogout(){
   currentUser = null;
   localStorage.removeItem('slabmarket_token');
   accountFormMode = 'login';
+  await loadProfile(); // fall back to the anonymous device profile, not the just-logged-out account's data
   renderAccountPanel();
+  renderProfile();
 }
 
 function openSellersPanel(){
