@@ -91,6 +91,9 @@
     display:flex;align-items:center;justify-content:center;color:#fff;font-family:'Poppins',sans-serif;font-weight:700;font-size:13px;flex-shrink:0;overflow:hidden;}
   .mp-avatar img{width:100%;height:100%;object-fit:cover;}
   .mp-seller{font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;color:var(--ink);flex:1;}
+  .follow-inline-btn{background:var(--violet-soft);color:var(--violet);border:none;font-family:'Poppins',sans-serif;
+    font-weight:600;font-size:10.5px;padding:5px 10px;border-radius:20px;cursor:pointer;margin-right:6px;}
+  .follow-inline-btn.following{background:var(--bg2);color:var(--ink-soft);}
   .mp-deal-badge{
     background:var(--ink);color:#fff;font-family:'Poppins',sans-serif;
     font-weight:700;font-size:10px;padding:5px 10px;border-radius:20px;white-space:nowrap;
@@ -158,6 +161,13 @@
   .profile-name{font-family:'Poppins',sans-serif;font-weight:700;font-size:17px;color:var(--ink);display:flex;align-items:center;gap:8px;}
   .edit-name-btn{background:none;border:none;color:var(--ink-soft);cursor:pointer;padding:2px;}
   .profile-stats{display:flex;gap:10px;margin-top:5px;}
+  .follow-counts-row{display:flex;gap:16px;margin-top:8px;}
+  .follow-count-btn{background:none;border:none;padding:0;cursor:pointer;font-family:'Inter',sans-serif;font-size:12px;color:var(--ink-soft);}
+  .follow-count-btn b{color:var(--ink);font-family:'Poppins',sans-serif;font-weight:700;}
+  .follow-tabs{display:flex;gap:8px;margin-bottom:14px;}
+  .follow-tab{flex:1;background:var(--bg2);border:none;color:var(--ink-soft);font-family:'Poppins',sans-serif;
+    font-weight:600;font-size:12px;padding:10px;border-radius:12px;cursor:pointer;}
+  .follow-tab.active{background:var(--violet);color:#fff;}
   .stat-pill{font-family:'Inter',sans-serif;font-size:11px;color:var(--ink-soft);background:var(--violet-soft);padding:3px 9px;border-radius:20px;}
   .stat-pill b{color:var(--violet);}
 
@@ -548,6 +558,16 @@
     <div class="panel-scroll" id="account-content"></div>
   </div>
 
+  <div id="follow-panel" class="side-panel">
+    <div class="panel-head">
+      <button class="back-btn" onclick="closeFollowPanel()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="panel-title" id="follow-panel-title">Followers</div>
+    </div>
+    <div class="panel-scroll" id="follow-panel-content"></div>
+  </div>
+
   <div class="sheet-backdrop" id="buynow-backdrop" onclick="closeBuyNowSheet()"></div>
   <div class="sheet" id="buynow-sheet">
     <div class="sheet-handle"></div>
@@ -653,7 +673,7 @@ function showView(view){
   document.getElementById('account-icon-btn').style.display = view==='profile' ? 'flex' : 'none';
   if(view==='market') renderMarketplaceFeed();
   if(view==='saved') renderSavedList();
-  if(view==='profile') renderProfile();
+  if(view==='profile'){ renderProfile(); loadFollowStats().then(renderProfile); }
 }
 
 /* ---------------- Marketplace feed ----------------
@@ -740,6 +760,7 @@ function renderMarketplacePost(item){
       <div class="mp-post-head">
         <div class="mp-avatar">${profile.photo && isOwn ? `<img src="${profile.photo}">` : initials(item.sellerName)}</div>
         <div class="mp-seller">${item.sellerName}</div>
+        ${!isOwn && currentUser ? `<button class="follow-inline-btn ${following.some(f=>f.username===item.sellerName)?'following':''}" onclick="toggleFollow('${item.sellerName}')">${following.some(f=>f.username===item.sellerName) ? 'Following' : 'Follow'}</button>` : ''}
         ${dealBadge}
       </div>
       <div class="mp-img">${photos[0] ? `<img src="${photos[0]}">` : ''}</div>
@@ -906,6 +927,11 @@ function renderProfile(){
           <div class="stat-pill"><b>${myListings.length}</b> listed</div>
           <div class="stat-pill"><b>${collection.length}</b> in collection</div>
         </div>
+        ${currentUser ? `
+        <div class="follow-counts-row">
+          <button class="follow-count-btn" onclick="openFollowPanel('followers')"><b>${followers.length}</b> Followers</button>
+          <button class="follow-count-btn" onclick="openFollowPanel('following')"><b>${following.length}</b> Following</button>
+        </div>` : ''}
       </div>
     </div>
     ${profile.bio ? `<div class="profile-bio">${profile.bio}</div>` : `<button class="add-bio-btn" onclick="openEditProfileSheet()">+ Add a bio</button>`}
@@ -1123,6 +1149,67 @@ async function submitNewListing(){
 let authToken = localStorage.getItem('slabmarket_token') || null;
 let currentUser = null;
 let accountFormMode = 'login'; // 'login' | 'register'
+let followers = [];
+let following = [];
+
+async function loadFollowStats(){
+  if(!currentUser){ followers = []; following = []; return; }
+  try{
+    const [followersRes, followingRes] = await Promise.all([
+      fetch(`${PROXY_BASE}/api/users/${currentUser.username}/followers`),
+      fetch(`${PROXY_BASE}/api/users/${currentUser.username}/following`),
+    ]);
+    followers = await followersRes.json();
+    following = await followingRes.json();
+  } catch(e){ followers = []; following = []; }
+}
+
+async function toggleFollow(username){
+  if(!currentUser){ alert('Log in to follow sellers.'); openAccountPanel(); return; }
+  const isFollowing = following.some(f => f.username === username);
+  try{
+    if(isFollowing){
+      await fetch(`${PROXY_BASE}/api/follow/${username}`, { method:'DELETE', headers:{'Authorization':'Bearer ' + authToken} });
+      following = following.filter(f => f.username !== username);
+    } else {
+      const res = await fetch(`${PROXY_BASE}/api/follow`, {
+        method:'POST', headers:{'Content-Type':'application/json', 'Authorization':'Bearer ' + authToken},
+        body: JSON.stringify({ username }),
+      });
+      if(!res.ok){ const err = await res.json().catch(()=>({})); alert(err.error || 'Could not follow.'); return; }
+      following.push({ username, since: new Date().toISOString() });
+    }
+    renderMarketplaceFeed();
+  } catch(e){ alert("Couldn't reach the server — make sure it's running."); }
+}
+
+function openFollowPanel(tab){
+  followPanelTab = tab;
+  renderFollowPanel();
+  document.getElementById('follow-panel').classList.add('open');
+}
+function closeFollowPanel(){ document.getElementById('follow-panel').classList.remove('open'); }
+let followPanelTab = 'followers';
+function renderFollowPanel(){
+  document.getElementById('follow-panel-title').textContent = followPanelTab === 'followers' ? 'Followers' : 'Following';
+  const list = followPanelTab === 'followers' ? followers : following;
+  const el = document.getElementById('follow-panel-content');
+  el.innerHTML = `
+    <div class="follow-tabs">
+      <button class="follow-tab ${followPanelTab==='followers'?'active':''}" onclick="followPanelTab='followers'; renderFollowPanel();">Followers (${followers.length})</button>
+      <button class="follow-tab ${followPanelTab==='following'?'active':''}" onclick="followPanelTab='following'; renderFollowPanel();">Following (${following.length})</button>
+    </div>
+    ${list.length === 0
+      ? `<div class="empty-threads">${followPanelTab==='followers' ? 'No followers yet.' : "You're not following anyone yet."}</div>`
+      : list.map(f => `
+        <div class="thread-row" style="cursor:default;">
+          <div class="thread-avatar">${initials(f.username)}</div>
+          <div class="thread-meta"><div class="tm-name">${f.username}</div></div>
+          ${followPanelTab==='following' ? `<button class="mark-sold-btn" onclick="toggleFollow('${f.username}'); renderFollowPanel();">Unfollow</button>` : ''}
+        </div>`).join('')
+    }
+  `;
+}
 
 async function loadCurrentUser(){
   if(!authToken) return;
@@ -1560,6 +1647,7 @@ async function reloadListings(){
 
 async function init(){
   await Promise.all([loadProfile(), loadListings(), loadCollection(), loadMessages(), loadCurrentUser()]);
+  await loadFollowStats();
   renderMarketplaceFeed();
 }
 init();

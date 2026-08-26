@@ -353,4 +353,35 @@ app.put('/api/auth/me', requireAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+/* ---------------- followers / following ---------------- */
+app.get('/api/users/:username/followers', async (req, res) => {
+  try {
+    const rows = await sb(supabase.from('follows').select('follower_username, created_at').eq('followed_username', req.params.username).order('created_at', { ascending: false }));
+    res.json(rows.map(r => ({ username: r.follower_username, since: r.created_at })));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+app.get('/api/users/:username/following', async (req, res) => {
+  try {
+    const rows = await sb(supabase.from('follows').select('followed_username, created_at').eq('follower_username', req.params.username).order('created_at', { ascending: false }));
+    res.json(rows.map(r => ({ username: r.followed_username, since: r.created_at })));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+app.post('/api/follow', requireAuth, async (req, res) => {
+  try {
+    const target = (req.body.username || '').trim().toLowerCase();
+    if (!target) return res.status(400).json({ error: 'username is required' });
+    if (target === req.username) return res.status(400).json({ error: "You can't follow yourself." });
+    const existingUser = await sb(supabase.from('users').select('username').eq('username', target));
+    if (!existingUser[0]) return res.status(404).json({ error: 'User not found' });
+    await sb(supabase.from('follows').upsert({ follower_username: req.username, followed_username: target }, { onConflict: 'follower_username,followed_username' }));
+    res.json({ following: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+app.delete('/api/follow/:username', requireAuth, async (req, res) => {
+  try {
+    await sb(supabase.from('follows').delete().eq('follower_username', req.username).eq('followed_username', req.params.username));
+    res.json({ following: false });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.listen(PORT, () => console.log(`Flipit server running on http://localhost:${PORT} (Supabase-backed)`));
