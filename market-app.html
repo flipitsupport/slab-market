@@ -161,6 +161,10 @@
   .profile-name{font-family:'Poppins',sans-serif;font-weight:700;font-size:17px;color:var(--ink);display:flex;align-items:center;gap:8px;}
   .edit-name-btn{background:none;border:none;color:var(--ink-soft);cursor:pointer;padding:2px;}
   .profile-stats{display:flex;gap:10px;margin-top:5px;}
+  .rating-badge{background:var(--amber-soft);border:none;border-radius:20px;padding:6px 12px;
+    display:flex;align-items:center;gap:5px;cursor:pointer;font-family:'Inter',sans-serif;font-size:12px;color:var(--ink);}
+  .rating-badge .rb-stars{color:var(--amber);font-size:13px;letter-spacing:1px;}
+  .rating-badge .rb-count{color:var(--ink-soft);font-size:11px;}
   .follow-counts-row{display:flex;gap:16px;margin-top:8px;}
   .follow-count-btn{background:none;border:none;padding:0;cursor:pointer;font-family:'Inter',sans-serif;font-size:12px;color:var(--ink-soft);}
   .follow-count-btn b{color:var(--ink);font-family:'Poppins',sans-serif;font-weight:700;}
@@ -508,6 +512,7 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
       <div class="panel-title" id="msg-panel-title">Messages</div>
+      <button class="mark-sold-btn" id="msg-rate-seller-btn" style="display:none;margin-left:auto;"></button>
     </div>
     <div id="thread-list-view" class="panel-scroll"></div>
     <div id="thread-chat-view" class="msg-chat" style="display:none;">
@@ -566,6 +571,26 @@
       <div class="panel-title" id="follow-panel-title">Followers</div>
     </div>
     <div class="panel-scroll" id="follow-panel-content"></div>
+  </div>
+
+  <div id="reviews-panel" class="side-panel">
+    <div class="panel-head">
+      <button class="back-btn" onclick="closeReviewsPanel()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="panel-title" id="reviews-panel-title">Reviews</div>
+    </div>
+    <div class="panel-scroll" id="reviews-panel-content"></div>
+  </div>
+
+  <div class="sheet-backdrop" id="review-backdrop" onclick="closeLeaveReviewSheet()"></div>
+  <div class="sheet" id="review-sheet">
+    <div class="sheet-handle"></div>
+    <h3>Leave a review</h3>
+    <div class="sub" id="review-target-label"></div>
+    <div class="mp-stars" id="review-stars-input" style="justify-content:center;gap:8px;margin:16px 0;"></div>
+    <div class="form-field"><label>Comment (optional)</label><textarea id="review-comment-input" rows="3" placeholder="How did the transaction go?"></textarea></div>
+    <button class="send-btn" onclick="submitReview()">Submit review</button>
   </div>
 
   <div class="sheet-backdrop" id="buynow-backdrop" onclick="closeBuyNowSheet()"></div>
@@ -673,7 +698,7 @@ function showView(view){
   document.getElementById('account-icon-btn').style.display = view==='profile' ? 'flex' : 'none';
   if(view==='market') renderMarketplaceFeed();
   if(view==='saved') renderSavedList();
-  if(view==='profile'){ renderProfile(); loadFollowStats().then(renderProfile); }
+  if(view==='profile'){ renderProfile(); Promise.all([loadFollowStats(), loadReviewSummary()]).then(renderProfile); }
 }
 
 /* ---------------- Marketplace feed ----------------
@@ -924,8 +949,12 @@ function renderProfile(){
           </button>
         </div>
         <div class="profile-stats">
-          <div class="stat-pill"><b>${myListings.length}</b> listed</div>
-          <div class="stat-pill"><b>${collection.length}</b> in collection</div>
+          ${currentUser ? `
+          <button class="rating-badge" onclick="openReviewsPanel(currentUser.username)">
+            ${myReviewSummary.average !== null
+              ? `<span class="rb-stars">${'\u2605'.repeat(Math.round(myReviewSummary.average))}${'\u2606'.repeat(5-Math.round(myReviewSummary.average))}</span> <b>${myReviewSummary.average.toFixed(1)}</b> <span class="rb-count">(${myReviewSummary.count})</span>`
+              : `<span class="rb-stars">${'\u2606'.repeat(5)}</span> <span class="rb-count">No reviews yet</span>`}
+          </button>` : ''}
         </div>
         ${currentUser ? `
         <div class="follow-counts-row">
@@ -1150,6 +1179,95 @@ let authToken = localStorage.getItem('slabmarket_token') || null;
 let currentUser = null;
 let accountFormMode = 'login'; // 'login' | 'register'
 let followers = [];
+let myReviewSummary = { average: null, count: 0, reviews: [] };
+
+async function loadReviewSummary(){
+  if(!currentUser){ myReviewSummary = { average: null, count: 0, reviews: [] }; return; }
+  try{
+    const res = await fetch(`${PROXY_BASE}/api/users/${currentUser.username}/reviews`);
+    myReviewSummary = await res.json();
+  } catch(e){ myReviewSummary = { average: null, count: 0, reviews: [] }; }
+}
+
+function openReviewsPanel(username){
+  reviewsPanelUsername = username;
+  renderReviewsPanel();
+  document.getElementById('reviews-panel').classList.add('open');
+}
+function closeReviewsPanel(){ document.getElementById('reviews-panel').classList.remove('open'); }
+let reviewsPanelUsername = null;
+async function renderReviewsPanel(){
+  document.getElementById('reviews-panel-title').textContent = `${reviewsPanelUsername}'s Reviews`;
+  const el = document.getElementById('reviews-panel-content');
+  el.innerHTML = `<div class="stage-msg" style="padding:40px;"><div class="spinner"></div></div>`;
+  let summary;
+  try{
+    const res = await fetch(`${PROXY_BASE}/api/users/${reviewsPanelUsername}/reviews`);
+    summary = await res.json();
+  } catch(e){ el.innerHTML = `<div class="empty-threads">Couldn't load reviews.</div>`; return; }
+
+  if(summary.count === 0){
+    el.innerHTML = `<div class="empty-threads">No reviews yet.</div>`;
+    return;
+  }
+  el.innerHTML = `
+    <div class="rating-badge" style="margin-bottom:16px;">
+      <span class="rb-stars">${'\u2605'.repeat(Math.round(summary.average))}${'\u2606'.repeat(5-Math.round(summary.average))}</span>
+      <b>${summary.average.toFixed(1)}</b> <span class="rb-count">(${summary.count} review${summary.count===1?'':'s'})</span>
+    </div>
+    ${summary.reviews.map(r => `
+      <div class="seller-order-row" style="align-items:flex-start;">
+        <div class="thread-avatar" style="flex-shrink:0;">${initials(r.reviewerUsername)}</div>
+        <div class="so-meta">
+          <div class="so-name">${r.reviewerUsername} <span style="color:var(--amber);">${'\u2605'.repeat(r.stars)}${'\u2606'.repeat(5-r.stars)}</span></div>
+          ${r.listingName ? `<div class="so-sub">Re: ${r.listingName}${r.role !== 'general' ? ` \u00b7 as ${r.role}` : ''}</div>` : ''}
+          ${r.comment ? `<div class="so-sub" style="margin-top:4px;">"${r.comment}"</div>` : ''}
+        </div>
+      </div>`).join('')}
+  `;
+}
+
+let pendingReviewTarget = null; // { username, listingId, listingName, role }
+function openLeaveReviewSheet(username, listingId, listingName, role){
+  if(!currentUser){ alert('Log in to leave a review.'); openAccountPanel(); return; }
+  pendingReviewTarget = { username, listingId, listingName, role };
+  document.getElementById('review-stars-input').innerHTML = [1,2,3,4,5].map(n =>
+    `<svg class="mp-star" data-n="${n}" onclick="setReviewStars(${n})" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>`
+  ).join('');
+  reviewStarsValue = 0;
+  document.getElementById('review-comment-input').value = '';
+  document.getElementById('review-target-label').textContent = `Reviewing ${username}${listingName ? ' — ' + listingName : ''}`;
+  document.getElementById('review-backdrop').classList.add('open');
+  document.getElementById('review-sheet').classList.add('open');
+}
+function closeLeaveReviewSheet(){
+  document.getElementById('review-backdrop').classList.remove('open');
+  document.getElementById('review-sheet').classList.remove('open');
+}
+let reviewStarsValue = 0;
+function setReviewStars(n){
+  reviewStarsValue = n;
+  document.querySelectorAll('#review-stars-input .mp-star').forEach(s => {
+    s.classList.toggle('filled', Number(s.dataset.n) <= n);
+  });
+}
+async function submitReview(){
+  if(!reviewStarsValue){ alert('Tap a star rating first.'); return; }
+  const comment = document.getElementById('review-comment-input').value.trim();
+  try{
+    const res = await fetch(`${PROXY_BASE}/api/reviews`, {
+      method:'POST', headers:{'Content-Type':'application/json', 'Authorization':'Bearer ' + authToken},
+      body: JSON.stringify({
+        revieweeUsername: pendingReviewTarget.username, listingId: pendingReviewTarget.listingId,
+        listingName: pendingReviewTarget.listingName, role: pendingReviewTarget.role,
+        stars: reviewStarsValue, comment,
+      }),
+    });
+    if(!res.ok){ const err = await res.json().catch(()=>({})); alert(err.error || 'Could not submit review.'); return; }
+    closeLeaveReviewSheet();
+    alert('Review submitted — thanks for helping keep this honest.');
+  } catch(e){ alert("Couldn't reach the server — make sure it's running."); }
+}
 let following = [];
 
 async function loadFollowStats(){
@@ -1409,6 +1527,7 @@ function renderSellersDashboard(){
           <div class="so-sub">Sold ${soldDate}${item.buyerName ? ' · to ' + item.buyerName : ''}</div>
         </div>
         <div class="so-price">$${(item.soldPrice || 0).toFixed(2)}</div>
+        ${item.buyerName ? `<button class="mark-sold-btn" onclick="openLeaveReviewSheet('${item.buyerName}', '${item.id}', '${item.name.replace(/'/g,"\\'")}', 'buyer')">Rate buyer</button>` : ''}
       </div>`;
     }).join('')}
   `;
@@ -1570,6 +1689,20 @@ function openThread(id){
   document.getElementById('msg-panel-title').textContent = thread.contactName;
   document.getElementById('msg-back-btn').onclick = backToThreadList;
   renderThreadChat(thread);
+
+  // Only show "Rate seller" when I'm plausibly the buyer in this thread —
+  // i.e. the listing exists and I'm not its seller myself.
+  const rateBtn = document.getElementById('msg-rate-seller-btn');
+  const relatedListing = listings.find(l => l.id === thread.listingId);
+  const iAmSeller = currentUser && relatedListing && relatedListing.sellerName === currentUser.username;
+  if(currentUser && thread.contactName && !iAmSeller){
+    rateBtn.style.display = 'inline-block';
+    rateBtn.textContent = 'Rate seller';
+    rateBtn.onclick = () => openLeaveReviewSheet(thread.contactName, thread.listingId, thread.listingName, 'seller');
+  } else {
+    rateBtn.style.display = 'none';
+  }
+
   if(thread.urgent){
     thread.urgent = false; // clear immediately in the UI
     fetch(`${PROXY_BASE}/api/messages/${id}/seen`, { method: 'POST' }).catch(() => {});
@@ -1582,6 +1715,7 @@ function backToThreadList(){
   document.getElementById('thread-chat-view').style.display = 'none';
   document.getElementById('msg-panel-title').textContent = 'Messages';
   document.getElementById('msg-back-btn').onclick = closeMessagesPanel;
+  document.getElementById('msg-rate-seller-btn').style.display = 'none';
   renderThreadList();
 }
 function renderThreadChat(thread){
@@ -1648,6 +1782,7 @@ async function reloadListings(){
 async function init(){
   await Promise.all([loadProfile(), loadListings(), loadCollection(), loadMessages(), loadCurrentUser()]);
   await loadFollowStats();
+  await loadReviewSummary();
   renderMarketplaceFeed();
 }
 init();

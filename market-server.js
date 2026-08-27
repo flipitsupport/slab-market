@@ -384,4 +384,43 @@ app.delete('/api/follow/:username', requireAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+/* ---------------- buyer/seller reviews ----------------
+   Rates the PERSON based on a real transaction, separate from the
+   comp-proof star ratings on individual listings. */
+app.get('/api/users/:username/reviews', async (req, res) => {
+  try {
+    const rows = await sb(supabase.from('reviews').select('*').eq('reviewee_username', req.params.username).order('created_at', { ascending: false }));
+    const avg = rows.length ? rows.reduce((sum, r) => sum + r.stars, 0) / rows.length : null;
+    res.json({
+      average: avg,
+      count: rows.length,
+      reviews: rows.map(r => ({
+        id: r.id, reviewerUsername: r.reviewer_username, listingName: r.listing_name,
+        role: r.role, stars: r.stars, comment: r.comment, createdAt: r.created_at,
+      })),
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/reviews', requireAuth, async (req, res) => {
+  try {
+    const { revieweeUsername, listingId, listingName, role, stars, comment } = req.body;
+    const target = (revieweeUsername || '').trim().toLowerCase();
+    if (!target) return res.status(400).json({ error: 'revieweeUsername is required' });
+    if (target === req.username) return res.status(400).json({ error: "You can't review yourself." });
+    const starsNum = Number(stars);
+    if (!starsNum || starsNum < 1 || starsNum > 5) return res.status(400).json({ error: 'stars must be 1-5' });
+    const existingUser = await sb(supabase.from('users').select('username').eq('username', target));
+    if (!existingUser[0]) return res.status(404).json({ error: 'User not found' });
+
+    const row = {
+      id: newId('review'), reviewer_username: req.username, reviewee_username: target,
+      listing_id: listingId || null, listing_name: listingName || '',
+      role: role || 'general', stars: starsNum, comment: comment || '',
+    };
+    const rows = await sb(supabase.from('reviews').insert(row).select());
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.listen(PORT, () => console.log(`Flipit server running on http://localhost:${PORT} (Supabase-backed)`));
