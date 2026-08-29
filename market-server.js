@@ -155,43 +155,6 @@ app.delete('/api/listings/:id', requireAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-/* ---------------- My Collection ---------------- */
-function collectionOut(row) {
-  return {
-    id: row.id, name: row.name, sport: row.sport, team: row.team, year: row.year,
-    pricePaid: Number(row.price_paid), condition: row.condition, grade: row.grade, details: row.details,
-    photos: row.photos || [], photo: row.photo, createdAt: row.created_at,
-  };
-}
-app.get('/api/collection', requireAuth, async (req, res) => {
-  try {
-    const rows = await sb(supabase.from('collection_items').select('*').eq('owner_username', req.username).order('created_at', { ascending: false }));
-    res.json(rows.map(collectionOut));
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-app.post('/api/collection', requireAuth, async (req, res) => {
-  try {
-    const photos = Array.isArray(req.body.photos) ? req.body.photos.slice(0, 4) : (req.body.photo ? [req.body.photo] : []);
-    const row = {
-      id: newId('coll'), owner_username: req.username, name: req.body.name || 'Untitled card', sport: req.body.sport || '',
-      team: req.body.team || '', year: req.body.year || '', price_paid: Number(req.body.pricePaid) || 0,
-      condition: req.body.condition || 'Raw', grade: req.body.grade || 'Raw', details: req.body.details || '',
-      photos, photo: photos[0] || null,
-    };
-    const rows = await sb(supabase.from('collection_items').insert(row).select());
-    res.json(collectionOut(rows[0]));
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-app.delete('/api/collection/:id', requireAuth, async (req, res) => {
-  try {
-    const existing = await sb(supabase.from('collection_items').select('owner_username').eq('id', req.params.id));
-    if (!existing[0]) return res.json({ deleted: false });
-    if (existing[0].owner_username !== req.username) return res.status(403).json({ error: 'Not your collection item' });
-    await sb(supabase.from('collection_items').delete().eq('id', req.params.id));
-    res.json({ deleted: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
 /* ---------------- messages ---------------- */
 function threadOut(row, viewerUsername) {
   const otherUsername = row.participant_a === viewerUsername ? row.participant_b : row.participant_a;

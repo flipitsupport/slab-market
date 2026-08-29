@@ -461,41 +461,6 @@
     <button class="send-btn" onclick="submitNewListing()">List this card</button>
   </div>
 
-  <!-- Add to collection -->
-  <div class="sheet-backdrop" id="collection-add-backdrop" onclick="closeCollectionAddSheet()"></div>
-  <div class="sheet" id="collection-add-sheet">
-    <div class="sheet-handle"></div>
-    <h3>Add to collection</h3>
-    <div class="sub">Cards you own — separate from Marketplace listings.</div>
-    <div class="form-field">
-      <label>Photos (up to 4)</label>
-      <div class="photo-grid" id="collection-photo-grid"></div>
-    </div>
-    <div class="form-field"><label>Title</label><input type="text" id="cf-name" placeholder="e.g. 2024 Prestige Chrome M. Alvarez Rookie"></div>
-    <div class="field-row">
-      <div class="form-field"><label>Sport</label>
-        <select id="cf-sport"><option>Baseball</option><option>Basketball</option><option>Hockey</option><option>Football</option></select>
-      </div>
-      <div class="form-field"><label>Year</label><input type="number" id="cf-year" placeholder="2024" value="2024"></div>
-    </div>
-    <div class="form-field"><label>Team</label><input type="text" id="cf-team" placeholder="e.g. Dodgers"></div>
-    <div class="field-row">
-      <div class="form-field"><label>Condition</label>
-        <select id="cf-condition" onchange="toggleCollectionGradeField()">
-          <option>Raw</option><option>PSA</option><option>BGS</option><option>SGC</option><option>CSG</option><option>Other graded</option>
-        </select>
-      </div>
-      <div class="form-field" id="cf-grade-wrap" style="display:none;">
-        <label>Grade</label><input type="text" id="cf-grade" placeholder="e.g. 9.5">
-      </div>
-    </div>
-    <div class="form-field"><label>Price you paid ($)</label><input type="number" id="cf-price" placeholder="45"></div>
-    <div class="form-field"><label>Details</label>
-      <textarea id="cf-details" rows="3" placeholder="Where you got it, any notes..."></textarea>
-    </div>
-    <button class="send-btn" onclick="submitCollectionItem()">Add to collection</button>
-  </div>
-
   <!-- Edit profile -->
   <div class="sheet-backdrop" id="edit-profile-backdrop" onclick="closeEditProfileSheet()"></div>
   <div class="sheet" id="edit-profile-sheet">
@@ -525,23 +490,6 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 20l16-8L4 4v6l10 2-10 2v6z" fill="currentColor"/></svg>
         </button>
       </div>
-    </div>
-  </div>
-
-  <!-- Collection -->
-  <div id="collection-panel" class="side-panel">
-    <div class="panel-head">
-      <button class="back-btn" onclick="closeCollectionPanel()">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-      <div class="panel-title">My Collection</div>
-    </div>
-    <div class="panel-scroll">
-      <button class="list-card-btn" onclick="openCollectionAddSheet()">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
-        Add to collection
-      </button>
-      <div id="collection-grid"></div>
     </div>
   </div>
 
@@ -638,12 +586,10 @@ const PROXY_BASE = ''; // relative — automatically points wherever this page i
 let profile = { displayName: 'Collector' };
 let listings = [];
 let saved = [];
-let collection = [];
 let threads = [];
 let activeThreadId = null;
 let pendingNewPhotos = [];
 let pendingCompScreenshot = null;
-let pendingCollectionPhotos = [];
 
 /* ---------------- init ---------------- */
 async function loadProfile(){
@@ -661,13 +607,6 @@ async function loadListings(){
     listings = [];
     listingsLoadError = e.message;
   }
-}
-async function loadCollection(){
-  if(!currentUser){ collection = []; return; }
-  try{
-    const res = await fetch(`${PROXY_BASE}/api/collection`, { headers: { 'Authorization': 'Bearer ' + authToken } });
-    collection = res.ok ? await res.json() : [];
-  } catch(e){ collection = []; }
 }
 async function loadMessages(){
   if(!currentUser){ threads = []; return; }
@@ -1013,11 +952,6 @@ function renderProfile(){
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
         <span>Sellers</span>
       </button>
-      <button class="entry-tile" onclick="openCollectionPanel()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8L12 3 3 8l9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8M12 13v8"/></svg>
-        <span>My Collection</span>
-        <span class="entry-badge" id="collection-count-badge" style="display:${collection.length ? 'inline-block' : 'none'};">${collection.length}</span>
-      </button>
       <button class="entry-tile" onclick="openMessagesPanel()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
         <span>Messages</span>
@@ -1210,7 +1144,6 @@ async function submitNewListing(){
   if(document.getElementById('tab-market').classList.contains('active')) renderMarketplaceFeed();
 }
 
-/* ---------------- My Collection ---------------- */
 /* ---------------- Sellers dashboard ----------------
    Real numbers, not estimates — computed from listings you've actually
    marked as sold. There's no in-app payment processing yet, so "sold"
@@ -1684,106 +1617,6 @@ async function markListingSold(id){
   }
 }
 
-function openCollectionPanel(){
-  if(!currentUser){ alert('Log in to see your collection.'); openAccountPanel(); return; }
-  renderCollectionGrid();
-  document.getElementById('collection-panel').classList.add('open');
-}
-function closeCollectionPanel(){ document.getElementById('collection-panel').classList.remove('open'); }
-function renderCollectionGrid(){
-  const grid = document.getElementById('collection-grid');
-  if(collection.length === 0){
-    grid.innerHTML = `<div class="empty-collection">Nothing in your collection yet.</div>`;
-    return;
-  }
-  grid.className = 'listings-grid';
-  grid.innerHTML = collection.map(item => {
-    const photos = item.photos && item.photos.length ? item.photos : (item.photo ? [item.photo] : []);
-    return `<div class="mini-card">
-      <button class="mc-delete" onclick="deleteCollectionItem('${item.id}')" title="Remove">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
-      </button>
-      <div class="mc-art">${photos[0] ? `<img src="${photos[0]}">` : ''}</div>
-      <div class="mc-info"><div class="mc-name">${item.name}</div><div class="mc-price">Paid $${Number(item.pricePaid).toFixed(2)}</div></div>
-    </div>`;
-  }).join('');
-}
-function openCollectionAddSheet(){
-  pendingCollectionPhotos = [];
-  renderCollectionPhotoGrid();
-  document.getElementById('collection-add-backdrop').classList.add('open');
-  document.getElementById('collection-add-sheet').classList.add('open');
-}
-function closeCollectionAddSheet(){
-  document.getElementById('collection-add-backdrop').classList.remove('open');
-  document.getElementById('collection-add-sheet').classList.remove('open');
-}
-function renderCollectionPhotoGrid(){
-  const grid = document.getElementById('collection-photo-grid');
-  let html = '';
-  pendingCollectionPhotos.forEach((src, i) => {
-    html += `<div class="photo-slot filled"><img src="${src}">
-      <button class="remove-photo" onclick="removeCollectionPhoto(${i})">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
-      </button></div>`;
-  });
-  if(pendingCollectionPhotos.length < 4){
-    html += `<label class="photo-slot">
-      <span class="add-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg></span>
-      <input type="file" accept="image/*" onchange="handleCollectionPhoto(event)"></label>`;
-  }
-  grid.innerHTML = html;
-}
-async function handleCollectionPhoto(e){
-  const file = e.target.files[0];
-  if(!file || pendingCollectionPhotos.length >= 4) return;
-  try{
-    const dataUrl = await fileToDataURL(file);
-    pendingCollectionPhotos.push(dataUrl);
-    renderCollectionPhotoGrid();
-  } catch(err){ /* alert already shown inside fileToDataURL */ }
-}
-function removeCollectionPhoto(i){ pendingCollectionPhotos.splice(i, 1); renderCollectionPhotoGrid(); }
-function toggleCollectionGradeField(){
-  const c = document.getElementById('cf-condition').value;
-  document.getElementById('cf-grade-wrap').style.display = c === 'Raw' ? 'none' : 'block';
-}
-async function submitCollectionItem(){
-  if(!currentUser){ alert('Log in to add to your collection.'); openAccountPanel(); return; }
-  const name = document.getElementById('cf-name').value.trim();
-  const pricePaid = Number(document.getElementById('cf-price').value);
-  if(!name){ alert('Add at least a title to save this card.'); return; }
-  const condition = document.getElementById('cf-condition').value;
-  const gradeVal = document.getElementById('cf-grade').value.trim();
-  const payload = {
-    name, sport: document.getElementById('cf-sport').value, year: document.getElementById('cf-year').value,
-    team: document.getElementById('cf-team').value.trim(), pricePaid: pricePaid || 0, condition,
-    grade: condition === 'Raw' ? 'Raw' : `${condition}${gradeVal ? ' ' + gradeVal : ''}`,
-    details: document.getElementById('cf-details').value.trim(),
-    photos: pendingCollectionPhotos, photo: pendingCollectionPhotos[0] || null,
-  };
-  try{
-    const res = await fetch(`${PROXY_BASE}/api/collection`, { method:'POST', headers:{'Content-Type':'application/json', 'Authorization':'Bearer ' + authToken}, body: JSON.stringify(payload) });
-    if(!res.ok){ const err = await res.json().catch(()=>({})); alert(err.error || 'Could not add to collection.'); return; }
-    const created = await res.json();
-    collection.unshift(created);
-  } catch(e){ alert("Couldn't reach the server — make sure it's running."); return; }
-  document.getElementById('cf-name').value=''; document.getElementById('cf-team').value='';
-  document.getElementById('cf-price').value=''; document.getElementById('cf-grade').value='';
-  document.getElementById('cf-details').value=''; document.getElementById('cf-condition').value='Raw';
-  toggleCollectionGradeField();
-  pendingCollectionPhotos = [];
-  closeCollectionAddSheet();
-  renderProfile();
-  renderCollectionGrid();
-}
-async function deleteCollectionItem(id){
-  collection = collection.filter(i => i.id !== id);
-  renderCollectionGrid();
-  renderProfile();
-  try{ await fetch(`${PROXY_BASE}/api/collection/${id}`, { method:'DELETE', headers:{'Authorization':'Bearer ' + authToken} }); } catch(e){}
-}
-
 /* ---------------- messages ---------------- */
 function openMessagesPanel(){
   if(!currentUser){ alert('Log in to see your messages.'); openAccountPanel(); return; }
@@ -1916,7 +1749,7 @@ async function reloadListings(){
 
 async function init(){
   await Promise.all([loadProfile(), loadListings(), loadCurrentUser()]);
-  await Promise.all([loadCollection(), loadMessages(), loadFollowStats(), loadReviewSummary(), loadBlockedUsers()]);
+  await Promise.all([loadMessages(), loadFollowStats(), loadReviewSummary(), loadBlockedUsers()]);
   renderMarketplaceFeed();
 }
 init();
