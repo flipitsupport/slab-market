@@ -91,6 +91,8 @@
     display:flex;align-items:center;justify-content:center;color:#fff;font-family:'Poppins',sans-serif;font-weight:700;font-size:13px;flex-shrink:0;overflow:hidden;}
   .mp-avatar img{width:100%;height:100%;object-fit:cover;}
   .mp-seller{font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;color:var(--ink);flex:1;}
+  .post-menu-btn{background:none;border:none;color:var(--ink-soft);cursor:pointer;padding:4px;margin-left:4px;}
+  .post-menu-btn svg{width:18px;height:18px;}
   .follow-inline-btn{background:var(--violet-soft);color:var(--violet);border:none;font-family:'Poppins',sans-serif;
     font-weight:600;font-size:10.5px;padding:5px 10px;border-radius:20px;cursor:pointer;margin-right:6px;}
   .follow-inline-btn.following{background:var(--bg2);color:var(--ink-soft);}
@@ -593,6 +595,32 @@
     <button class="send-btn" onclick="submitReview()">Submit review</button>
   </div>
 
+  <div class="sheet-backdrop" id="post-menu-backdrop" onclick="closePostMenu()"></div>
+  <div class="sheet" id="post-menu-sheet">
+    <div class="sheet-handle"></div>
+    <button class="entry-btn" id="post-menu-block-btn" style="color:var(--pass);"></button>
+    <button class="entry-btn" id="post-menu-report-btn">Report this user</button>
+  </div>
+
+  <div class="sheet-backdrop" id="report-backdrop" onclick="closeReportSheet()"></div>
+  <div class="sheet" id="report-sheet">
+    <div class="sheet-handle"></div>
+    <h3>Report a user</h3>
+    <div class="sub" id="report-target-label"></div>
+    <div class="form-field">
+      <label>Reason</label>
+      <select id="report-reason-select">
+        <option>Scam or fraud</option>
+        <option>Fake comp / misleading listing</option>
+        <option>Harassment or abuse</option>
+        <option>Spam</option>
+        <option>Something else</option>
+      </select>
+    </div>
+    <div class="form-field"><label>Details (optional)</label><textarea id="report-details-input" rows="3" placeholder="What happened?"></textarea></div>
+    <button class="send-btn" style="background:linear-gradient(120deg, var(--pass), #8a2e2e);" onclick="submitReport()">Submit report</button>
+  </div>
+
   <div class="sheet-backdrop" id="buynow-backdrop" onclick="closeBuyNowSheet()"></div>
   <div class="sheet" id="buynow-sheet">
     <div class="sheet-handle"></div>
@@ -635,10 +663,18 @@ async function loadListings(){
   }
 }
 async function loadCollection(){
-  try{ const res = await fetch(`${PROXY_BASE}/api/collection`); collection = await res.json(); } catch(e){ collection = []; }
+  if(!currentUser){ collection = []; return; }
+  try{
+    const res = await fetch(`${PROXY_BASE}/api/collection`, { headers: { 'Authorization': 'Bearer ' + authToken } });
+    collection = res.ok ? await res.json() : [];
+  } catch(e){ collection = []; }
 }
 async function loadMessages(){
-  try{ const res = await fetch(`${PROXY_BASE}/api/messages`); threads = await res.json(); } catch(e){ threads = []; }
+  if(!currentUser){ threads = []; return; }
+  try{
+    const res = await fetch(`${PROXY_BASE}/api/messages`, { headers: { 'Authorization': 'Bearer ' + authToken } });
+    threads = res.ok ? await res.json() : [];
+  } catch(e){ threads = []; }
   const badge = document.getElementById('msg-count-badge');
   if(badge){ badge.style.display = threads.length ? 'inline-block' : 'none'; badge.textContent = threads.length; }
 }
@@ -726,6 +762,7 @@ function renderMarketplaceFeed(){
 
   let filtered = listings.filter(item => {
     if(item.status === 'sold') return false;
+    if(blockedUsers.some(b => b.username === item.sellerName)) return false;
     if(sportFilter && item.sport !== sportFilter) return false;
     if(query){
       const haystack = `${item.name} ${item.team} ${item.sport}`.toLowerCase();
@@ -787,6 +824,9 @@ function renderMarketplacePost(item){
         <div class="mp-seller">${item.sellerName}</div>
         ${!isOwn && currentUser ? `<button class="follow-inline-btn ${following.some(f=>f.username===item.sellerName)?'following':''}" onclick="toggleFollow('${item.sellerName}')">${following.some(f=>f.username===item.sellerName) ? 'Following' : 'Follow'}</button>` : ''}
         ${dealBadge}
+        ${!isOwn ? `<button class="post-menu-btn" onclick="openPostMenu('${item.sellerName}', '${item.id}')">
+          <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+        </button>` : ''}
       </div>
       <div class="mp-img">${photos[0] ? `<img src="${photos[0]}">` : ''}</div>
       <div class="mp-actions-row">
@@ -820,16 +860,18 @@ function renderMarketplacePost(item){
 }
 
 async function rateListing(id, stars){
+  if(!currentUser){ alert('Log in to rate a comp screenshot.'); openAccountPanel(); return; }
   try{
     const res = await fetch(`${PROXY_BASE}/api/listings/${id}/rate`, {
-      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ stars }),
+      method: 'POST', headers: {'Content-Type':'application/json', 'Authorization':'Bearer ' + authToken}, body: JSON.stringify({ stars }),
     });
+    if(!res.ok){ const err = await res.json().catch(()=>({})); alert(err.error || 'Could not submit rating.'); return; }
     const updated = await res.json();
     const idx = listings.findIndex(l => l.id === id);
     if(idx >= 0) listings[idx] = updated;
     renderMarketplaceFeed();
   } catch(e){
-    alert("Couldn't reach your local server — make sure npm start is running.");
+    alert("Couldn't reach the server — make sure it's running.");
   }
 }
 
@@ -871,6 +913,7 @@ function renderSavedList(){
 
 /* ---------------- messaging from a listing ---------------- */
 function messageAboutListing(id){
+  if(!currentUser){ alert('Log in to message sellers.'); openAccountPanel(); return; }
   const item = listings.find(l => l.id === id);
   if(!item) return;
   startOrOpenThread(item.sellerName, item.name, item.id, `Hi! I'm interested in "${item.name}" — is it still available?`);
@@ -917,6 +960,7 @@ function closeBuyNowSheet(){
 }
 function confirmBuyNow(){
   if(!buyNowItem) return;
+  if(!currentUser){ alert('Log in to complete a purchase.'); closeBuyNowSheet(); openAccountPanel(); return; }
   const price = Number(buyNowItem.price).toFixed(2);
   const url = `https://paypal.me/${encodeURIComponent(buyNowItem.sellerPaypalUsername)}/${price}USD`;
   window.open(url, '_blank');
@@ -1016,7 +1060,7 @@ async function deleteListing(id){
   listings = listings.filter(l => l.id !== id);
   saved = saved.filter(s => s.id !== id);
   renderProfile();
-  try{ await fetch(`${PROXY_BASE}/api/listings/${id}`, { method:'DELETE' }); } catch(e){}
+  try{ await fetch(`${PROXY_BASE}/api/listings/${id}`, { method:'DELETE', headers:{'Authorization':'Bearer ' + authToken} }); } catch(e){}
 }
 
 let pendingAvatarPhoto = null;
@@ -1122,6 +1166,7 @@ async function handleCompScreenshot(e){
   } catch(err){ /* alert already shown inside fileToDataURL */ }
 }
 async function submitNewListing(){
+  if(!currentUser){ alert('Log in to list a card.'); openAccountPanel(); return; }
   const name = document.getElementById('nf-name').value.trim();
   const price = Number(document.getElementById('nf-price').value);
   const compPrice = Number(document.getElementById('nf-comp-price').value);
@@ -1130,8 +1175,9 @@ async function submitNewListing(){
   const condition = document.getElementById('nf-condition').value;
   const gradeVal = document.getElementById('nf-grade').value.trim();
   const payload = {
-    sellerName: profile.displayName || 'Collector',
-    sellerPaypalUsername: (currentUser && currentUser.paypalUsername) || '',
+    // sellerName and sellerPaypalUsername are NOT sent — the server
+    // derives them from your logged-in account, so nobody can list a
+    // card claiming to be someone else.
     name,
     sport: document.getElementById('nf-sport').value,
     year: document.getElementById('nf-year').value,
@@ -1146,11 +1192,11 @@ async function submitNewListing(){
     compScreenshot: pendingCompScreenshot,
   };
   try{
-    const res = await fetch(`${PROXY_BASE}/api/listings`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    const res = await fetch(`${PROXY_BASE}/api/listings`, { method:'POST', headers:{'Content-Type':'application/json', 'Authorization':'Bearer ' + authToken}, body: JSON.stringify(payload) });
     if(!res.ok){ const err = await res.json(); alert(err.error || 'Could not create listing.'); return; }
     const created = await res.json();
     listings.unshift(created);
-  } catch(e){ alert("Couldn't reach your local server — make sure npm start is running."); return; }
+  } catch(e){ alert("Couldn't reach the server — make sure it's running."); return; }
   pendingNewPhotos = []; pendingCompScreenshot = null;
   document.getElementById('nf-name').value=''; document.getElementById('nf-team').value='';
   document.getElementById('nf-price').value=''; document.getElementById('nf-grade').value='';
@@ -1179,6 +1225,76 @@ let authToken = localStorage.getItem('slabmarket_token') || null;
 let currentUser = null;
 let accountFormMode = 'login'; // 'login' | 'register'
 let followers = [];
+let blockedUsers = [];
+
+async function loadBlockedUsers(){
+  if(!currentUser){ blockedUsers = []; return; }
+  try{
+    const res = await fetch(`${PROXY_BASE}/api/blocks`, { headers: { 'Authorization': 'Bearer ' + authToken } });
+    blockedUsers = await res.json();
+  } catch(e){ blockedUsers = []; }
+}
+async function toggleBlock(username){
+  if(!currentUser){ alert('Log in to block users.'); openAccountPanel(); return; }
+  const isBlocked = blockedUsers.some(b => b.username === username);
+  try{
+    if(isBlocked){
+      await fetch(`${PROXY_BASE}/api/blocks/${username}`, { method:'DELETE', headers:{'Authorization':'Bearer ' + authToken} });
+      blockedUsers = blockedUsers.filter(b => b.username !== username);
+    } else {
+      const res = await fetch(`${PROXY_BASE}/api/blocks`, {
+        method:'POST', headers:{'Content-Type':'application/json', 'Authorization':'Bearer ' + authToken},
+        body: JSON.stringify({ username }),
+      });
+      if(!res.ok){ const err = await res.json().catch(()=>({})); alert(err.error || 'Could not block user.'); return; }
+      blockedUsers.push({ username });
+    }
+    renderMarketplaceFeed();
+    if(document.getElementById('tab-profile').classList.contains('active')) renderProfile();
+  } catch(e){ alert("Couldn't reach the server — make sure it's running."); }
+}
+
+let pendingReportTarget = null;
+function openReportSheet(username, listingId){
+  if(!currentUser){ alert('Log in to report a user.'); openAccountPanel(); return; }
+  pendingReportTarget = { username, listingId };
+  document.getElementById('report-target-label').textContent = `Reporting ${username}`;
+  document.getElementById('report-reason-select').value = 'Scam or fraud';
+  document.getElementById('report-details-input').value = '';
+  document.getElementById('report-backdrop').classList.add('open');
+  document.getElementById('report-sheet').classList.add('open');
+}
+function closeReportSheet(){
+  document.getElementById('report-backdrop').classList.remove('open');
+  document.getElementById('report-sheet').classList.remove('open');
+}
+async function submitReport(){
+  const reason = document.getElementById('report-reason-select').value;
+  const details = document.getElementById('report-details-input').value.trim();
+  try{
+    const res = await fetch(`${PROXY_BASE}/api/reports`, {
+      method:'POST', headers:{'Content-Type':'application/json', 'Authorization':'Bearer ' + authToken},
+      body: JSON.stringify({ reportedUsername: pendingReportTarget.username, reason, details, listingId: pendingReportTarget.listingId }),
+    });
+    if(!res.ok){ const err = await res.json().catch(()=>({})); alert(err.error || 'Could not submit report.'); return; }
+    closeReportSheet();
+    alert('Report submitted. Thanks for helping keep Flipit safe.');
+  } catch(e){ alert("Couldn't reach the server — make sure it's running."); }
+}
+
+function openPostMenu(username, listingId){
+  pendingReportTarget = { username, listingId };
+  const isBlocked = blockedUsers.some(b => b.username === username);
+  document.getElementById('post-menu-block-btn').textContent = isBlocked ? 'Unblock ' + username : 'Block ' + username;
+  document.getElementById('post-menu-block-btn').onclick = () => { toggleBlock(username); closePostMenu(); };
+  document.getElementById('post-menu-report-btn').onclick = () => { closePostMenu(); openReportSheet(username, listingId); };
+  document.getElementById('post-menu-backdrop').classList.add('open');
+  document.getElementById('post-menu-sheet').classList.add('open');
+}
+function closePostMenu(){
+  document.getElementById('post-menu-backdrop').classList.remove('open');
+  document.getElementById('post-menu-sheet').classList.remove('open');
+}
 let myReviewSummary = { average: null, count: 0, reviews: [] };
 
 async function loadReviewSummary(){
@@ -1363,6 +1479,15 @@ function renderAccountPanel(){
         <div style="font-family:'Inter',sans-serif;font-size:10.5px;color:var(--ink-soft);margin-top:5px;">Buyers use this to pay you directly through PayPal — required for your listings to show a "Buy It Now" button. Don't have one? Create it free at paypal.me.</div>
       </div>
       <button class="send-btn" onclick="saveAccountDetails()">Save changes</button>
+      ${blockedUsers.length > 0 ? `
+      <div class="section-label" style="margin-top:18px;">Blocked users</div>
+      ${blockedUsers.map(b => `
+        <div class="seller-order-row">
+          <div class="thread-avatar" style="flex-shrink:0;">${initials(b.username)}</div>
+          <div class="so-meta"><div class="so-name">${b.username}</div></div>
+          <button class="mark-sold-btn" onclick="toggleBlock('${b.username}'); renderAccountPanel();">Unblock</button>
+        </div>`).join('')}
+      ` : ''}
       <button class="logout-btn" onclick="submitLogout()">Log out</button>
     `;
     return;
@@ -1459,6 +1584,8 @@ async function submitLogout(){
   } catch(e){ /* proceed to clear local state regardless */ }
   authToken = null;
   currentUser = null;
+  threads = []; followers = []; following = []; blockedUsers = [];
+  myReviewSummary = { average: null, count: 0, reviews: [] };
   localStorage.removeItem('slabmarket_token');
   accountFormMode = 'login';
   await loadProfile(); // fall back to the anonymous device profile, not the just-logged-out account's data
@@ -1543,9 +1670,10 @@ async function markListingSold(id){
   const buyerName = prompt('Buyer name (optional):', '') || null;
   try{
     const res = await fetch(`${PROXY_BASE}/api/listings/${id}/sold`, {
-      method: 'POST', headers: {'Content-Type':'application/json'},
+      method: 'POST', headers: {'Content-Type':'application/json', 'Authorization':'Bearer ' + authToken},
       body: JSON.stringify({ soldPrice, buyerName }),
     });
+    if(!res.ok){ const err = await res.json().catch(()=>({})); alert(err.error || 'Could not mark as sold.'); return; }
     const updated = await res.json();
     const idx = listings.findIndex(l => l.id === id);
     if(idx >= 0) listings[idx] = updated;
@@ -1557,6 +1685,7 @@ async function markListingSold(id){
 }
 
 function openCollectionPanel(){
+  if(!currentUser){ alert('Log in to see your collection.'); openAccountPanel(); return; }
   renderCollectionGrid();
   document.getElementById('collection-panel').classList.add('open');
 }
@@ -1620,6 +1749,7 @@ function toggleCollectionGradeField(){
   document.getElementById('cf-grade-wrap').style.display = c === 'Raw' ? 'none' : 'block';
 }
 async function submitCollectionItem(){
+  if(!currentUser){ alert('Log in to add to your collection.'); openAccountPanel(); return; }
   const name = document.getElementById('cf-name').value.trim();
   const pricePaid = Number(document.getElementById('cf-price').value);
   if(!name){ alert('Add at least a title to save this card.'); return; }
@@ -1633,10 +1763,11 @@ async function submitCollectionItem(){
     photos: pendingCollectionPhotos, photo: pendingCollectionPhotos[0] || null,
   };
   try{
-    const res = await fetch(`${PROXY_BASE}/api/collection`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    const res = await fetch(`${PROXY_BASE}/api/collection`, { method:'POST', headers:{'Content-Type':'application/json', 'Authorization':'Bearer ' + authToken}, body: JSON.stringify(payload) });
+    if(!res.ok){ const err = await res.json().catch(()=>({})); alert(err.error || 'Could not add to collection.'); return; }
     const created = await res.json();
     collection.unshift(created);
-  } catch(e){ alert("Couldn't reach your local server — make sure npm start is running."); return; }
+  } catch(e){ alert("Couldn't reach the server — make sure it's running."); return; }
   document.getElementById('cf-name').value=''; document.getElementById('cf-team').value='';
   document.getElementById('cf-price').value=''; document.getElementById('cf-grade').value='';
   document.getElementById('cf-details').value=''; document.getElementById('cf-condition').value='Raw';
@@ -1650,11 +1781,12 @@ async function deleteCollectionItem(id){
   collection = collection.filter(i => i.id !== id);
   renderCollectionGrid();
   renderProfile();
-  try{ await fetch(`${PROXY_BASE}/api/collection/${id}`, { method:'DELETE' }); } catch(e){}
+  try{ await fetch(`${PROXY_BASE}/api/collection/${id}`, { method:'DELETE', headers:{'Authorization':'Bearer ' + authToken} }); } catch(e){}
 }
 
 /* ---------------- messages ---------------- */
 function openMessagesPanel(){
+  if(!currentUser){ alert('Log in to see your messages.'); openAccountPanel(); return; }
   activeThreadId = null;
   document.getElementById('thread-list-view').style.display = 'block';
   document.getElementById('thread-chat-view').style.display = 'none';
@@ -1671,9 +1803,9 @@ function renderThreadList(){
   el.innerHTML = threads.map(t => {
     const last = t.messages[t.messages.length - 1];
     return `<div class="thread-row ${t.urgent ? 'urgent' : ''}" onclick="openThread('${t.id}')">
-      <div class="thread-avatar">${initials(t.contactName)}</div>
+      <div class="thread-avatar">${initials(t.otherUsername)}</div>
       <div class="thread-meta">
-        <div class="tm-name">${t.contactName} ${t.urgent ? '<span class="urgent-tag">URGENT</span>' : ''}</div>
+        <div class="tm-name">${t.otherUsername} ${t.urgent ? '<span class="urgent-tag">URGENT</span>' : ''}</div>
         ${t.listingName ? `<div class="tm-listing">Re: ${t.listingName}</div>` : ''}
         <div class="tm-last">${last ? last.text : ''}</div>
       </div>
@@ -1686,7 +1818,7 @@ function openThread(id){
   if(!thread) return;
   document.getElementById('thread-list-view').style.display = 'none';
   document.getElementById('thread-chat-view').style.display = 'flex';
-  document.getElementById('msg-panel-title').textContent = thread.contactName;
+  document.getElementById('msg-panel-title').textContent = thread.otherUsername;
   document.getElementById('msg-back-btn').onclick = backToThreadList;
   renderThreadChat(thread);
 
@@ -1695,10 +1827,10 @@ function openThread(id){
   const rateBtn = document.getElementById('msg-rate-seller-btn');
   const relatedListing = listings.find(l => l.id === thread.listingId);
   const iAmSeller = currentUser && relatedListing && relatedListing.sellerName === currentUser.username;
-  if(currentUser && thread.contactName && !iAmSeller){
+  if(currentUser && thread.otherUsername && !iAmSeller){
     rateBtn.style.display = 'inline-block';
     rateBtn.textContent = 'Rate seller';
-    rateBtn.onclick = () => openLeaveReviewSheet(thread.contactName, thread.listingId, thread.listingName, 'seller');
+    rateBtn.onclick = () => openLeaveReviewSheet(thread.otherUsername, thread.listingId, thread.listingName, 'seller');
   } else {
     rateBtn.style.display = 'none';
   }
@@ -1721,7 +1853,7 @@ function backToThreadList(){
 function renderThreadChat(thread){
   const body = document.getElementById('msg-chat-body');
   const intro = thread.listingName ? `<div class="msg-bubble system">Re: ${thread.listingName}</div>` : '';
-  body.innerHTML = intro + thread.messages.map(m => `<div class="msg-bubble ${m.from === 'me' ? 'me' : 'them'}">${m.text}</div>`).join('');
+  body.innerHTML = intro + thread.messages.map(m => `<div class="msg-bubble ${m.from === currentUser.username ? 'me' : 'them'}">${m.text}</div>`).join('');
   body.scrollTop = body.scrollHeight;
 }
 async function sendThreadMessage(){
@@ -1733,44 +1865,47 @@ async function sendThreadMessage(){
   input.value = '';
   try{
     const res = await fetch(`${PROXY_BASE}/api/messages`, {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ threadId: thread.id, contactName: thread.contactName, listingName: thread.listingName, listingId: thread.listingId, text }),
+      method: 'POST', headers: {'Content-Type':'application/json', 'Authorization':'Bearer ' + authToken},
+      body: JSON.stringify({ threadId: thread.id, otherUsername: thread.otherUsername, listingName: thread.listingName, listingId: thread.listingId, text }),
     });
+    if(!res.ok){ const err = await res.json().catch(()=>({})); alert(err.error || 'Could not send message.'); return; }
     const updated = await res.json();
     const idx = threads.findIndex(t => t.id === updated.id);
     if(idx >= 0) threads[idx] = updated; else threads.unshift(updated);
     renderThreadChat(updated);
-  } catch(e){ alert("Couldn't reach your local server — make sure npm start is running."); }
+  } catch(e){ alert("Couldn't reach the server — make sure it's running."); }
 }
-async function startOrOpenThread(contactName, listingName, listingId, firstMessage){
+async function startOrOpenThread(otherUsername, listingName, listingId, firstMessage){
   try{
     const res = await fetch(`${PROXY_BASE}/api/messages`, {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ contactName, listingName, listingId, text: firstMessage }),
+      method: 'POST', headers: {'Content-Type':'application/json', 'Authorization':'Bearer ' + authToken},
+      body: JSON.stringify({ otherUsername, listingName, listingId, text: firstMessage }),
     });
+    if(!res.ok){ const err = await res.json().catch(()=>({})); alert(err.error || 'Could not send message.'); return; }
     const thread = await res.json();
     const idx = threads.findIndex(t => t.id === thread.id);
     if(idx >= 0) threads[idx] = thread; else threads.unshift(thread);
     openMessagesPanel();
     openThread(thread.id);
-  } catch(e){ alert("Couldn't reach your local server — make sure npm start is running."); }
+  } catch(e){ alert("Couldn't reach the server — make sure it's running."); }
 }
 
 // Same as above, but for the Buy It Now flow specifically: creates the
 // message flagged urgent, and deliberately does NOT navigate into the
 // thread (which would immediately mark it seen and clear the flag before
 // the seller — a different device/session — ever saw it).
-async function startUrgentThread(contactName, listingName, listingId, firstMessage){
+async function startUrgentThread(otherUsername, listingName, listingId, firstMessage){
   try{
     const res = await fetch(`${PROXY_BASE}/api/messages`, {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ contactName, listingName, listingId, text: firstMessage, urgent: true }),
+      method: 'POST', headers: {'Content-Type':'application/json', 'Authorization':'Bearer ' + authToken},
+      body: JSON.stringify({ otherUsername, listingName, listingId, text: firstMessage, urgent: true }),
     });
+    if(!res.ok){ const err = await res.json().catch(()=>({})); alert(err.error || 'Could not send message.'); return; }
     const thread = await res.json();
     const idx = threads.findIndex(t => t.id === thread.id);
     if(idx >= 0) threads[idx] = thread; else threads.unshift(thread);
-    alert(`Sent — ${contactName} will see an urgent notification to expect your PayPal Goods & Services payment.`);
-  } catch(e){ alert("Couldn't reach your local server — make sure npm start is running."); }
+    alert(`Sent — ${otherUsername} will see an urgent notification to expect your PayPal Goods & Services payment.`);
+  } catch(e){ alert("Couldn't reach the server — make sure it's running."); }
 }
 
 /* ---------------- startup ---------------- */
@@ -1780,9 +1915,8 @@ async function reloadListings(){
 }
 
 async function init(){
-  await Promise.all([loadProfile(), loadListings(), loadCollection(), loadMessages(), loadCurrentUser()]);
-  await loadFollowStats();
-  await loadReviewSummary();
+  await Promise.all([loadProfile(), loadListings(), loadCurrentUser()]);
+  await Promise.all([loadCollection(), loadMessages(), loadFollowStats(), loadReviewSummary(), loadBlockedUsers()]);
   renderMarketplaceFeed();
 }
 init();

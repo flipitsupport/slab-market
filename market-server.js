@@ -87,16 +87,21 @@ app.get('/api/listings', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.post('/api/listings', async (req, res) => {
+app.post('/api/listings', requireAuth, async (req, res) => {
   try {
     const photos = Array.isArray(req.body.photos) ? req.body.photos.slice(0, 4) : (req.body.photo ? [req.body.photo] : []);
     if (!req.body.compScreenshot || !req.body.compPrice) {
       return res.status(400).json({ error: 'Comp proof (screenshot + sold price) is required to list a card.' });
     }
+    // sellerName and sellerPaypalUsername come from the REAL logged-in
+    // account, never from client input -- otherwise anyone could list a
+    // card claiming to be someone else and redirect their PayPal payments.
+    const users = await sb(supabase.from('users').select('username, paypal_username').eq('username', req.username));
+    const account = users[0];
     const row = {
       id: newId('listing'),
-      seller_name: req.body.sellerName || 'Collector',
-      seller_paypal_username: req.body.sellerPaypalUsername || '',
+      seller_name: account.username,
+      seller_paypal_username: account.paypal_username || '',
       name: req.body.name || 'Untitled card',
       sport: req.body.sport || '', team: req.body.team || '', year: req.body.year || '',
       price: Number(req.body.price) || 0, condition: req.body.condition || 'Raw', grade: req.body.grade || 'Raw',
@@ -109,22 +114,26 @@ app.post('/api/listings', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.post('/api/listings/:id/rate', async (req, res) => {
+app.post('/api/listings/:id/rate', requireAuth, async (req, res) => {
   try {
     const stars = Number(req.body.stars);
     if (!stars || stars < 1 || stars > 5) return res.status(400).json({ error: 'stars must be 1-5' });
     const existing = await sb(supabase.from('listings').select('ratings').eq('id', req.params.id));
     if (!existing[0]) return res.status(404).json({ error: 'Listing not found' });
-    const ratings = [...(existing[0].ratings || []), { stars, ts: new Date().toISOString() }];
+    // One rating per person per listing -- replaces their previous rating
+    // instead of stacking, closing an easy vote-manipulation gap.
+    const priorRatings = (existing[0].ratings || []).filter(r => r.raterUsername !== req.username);
+    const ratings = [...priorRatings, { stars, raterUsername: req.username, ts: new Date().toISOString() }];
     const rows = await sb(supabase.from('listings').update({ ratings }).eq('id', req.params.id).select());
     res.json(listingOut(rows[0]));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.post('/api/listings/:id/sold', async (req, res) => {
+app.post('/api/listings/:id/sold', requireAuth, async (req, res) => {
   try {
-    const existing = await sb(supabase.from('listings').select('price').eq('id', req.params.id));
+    const existing = await sb(supabase.from('listings').select('price, seller_name').eq('id', req.params.id));
     if (!existing[0]) return res.status(404).json({ error: 'Listing not found' });
+    if (existing[0].seller_name !== req.username) return res.status(403).json({ error: 'Only the seller can mark this sold' });
     const update = {
       status: 'sold',
       sold_price: req.body.soldPrice ? Number(req.body.soldPrice) : existing[0].price,
@@ -136,11 +145,13 @@ app.post('/api/listings/:id/sold', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.delete('/api/listings/:id', async (req, res) => {
+app.delete('/api/listings/:id', requireAuth, async (req, res) => {
   try {
-    const existing = await sb(supabase.from('listings').select('id').eq('id', req.params.id));
+    const existing = await sb(supabase.from('listings').select('seller_name').eq('id', req.params.id));
+    if (!existing[0]) return res.json({ deleted: false });
+    if (existing[0].seller_name !== req.username) return res.status(403).json({ error: 'Only the seller can delete this listing' });
     await sb(supabase.from('listings').delete().eq('id', req.params.id));
-    res.json({ deleted: existing.length > 0 });
+    res.json({ deleted: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -152,17 +163,17 @@ function collectionOut(row) {
     photos: row.photos || [], photo: row.photo, createdAt: row.created_at,
   };
 }
-app.get('/api/collection', async (req, res) => {
+app.get('/api/collection', requireAuth, async (req, res) => {
   try {
-    const rows = await sb(supabase.from('collection_items').select('*').order('created_at', { ascending: false }));
+    const rows = await sb(supabase.from('collection_items').select('*').eq('owner_username', req.username).order('created_at', { ascending: false }));
     res.json(rows.map(collectionOut));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
-app.post('/api/collection', async (req, res) => {
+app.post('/api/collection', requireAuth, async (req, res) => {
   try {
     const photos = Array.isArray(req.body.photos) ? req.body.photos.slice(0, 4) : (req.body.photo ? [req.body.photo] : []);
     const row = {
-      id: newId('coll'), name: req.body.name || 'Untitled card', sport: req.body.sport || '',
+      id: newId('coll'), owner_username: req.username, name: req.body.name || 'Untitled card', sport: req.body.sport || '',
       team: req.body.team || '', year: req.body.year || '', price_paid: Number(req.body.pricePaid) || 0,
       condition: req.body.condition || 'Raw', grade: req.body.grade || 'Raw', details: req.body.details || '',
       photos, photo: photos[0] || null,
@@ -171,71 +182,101 @@ app.post('/api/collection', async (req, res) => {
     res.json(collectionOut(rows[0]));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
-app.delete('/api/collection/:id', async (req, res) => {
+app.delete('/api/collection/:id', requireAuth, async (req, res) => {
   try {
-    const existing = await sb(supabase.from('collection_items').select('id').eq('id', req.params.id));
+    const existing = await sb(supabase.from('collection_items').select('owner_username').eq('id', req.params.id));
+    if (!existing[0]) return res.json({ deleted: false });
+    if (existing[0].owner_username !== req.username) return res.status(403).json({ error: 'Not your collection item' });
     await sb(supabase.from('collection_items').delete().eq('id', req.params.id));
-    res.json({ deleted: existing.length > 0 });
+    res.json({ deleted: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 /* ---------------- messages ---------------- */
-function threadOut(row) {
+function threadOut(row, viewerUsername) {
+  const otherUsername = row.participant_a === viewerUsername ? row.participant_b : row.participant_a;
   return {
-    id: row.id, contactName: row.contact_name, listingName: row.listing_name, listingId: row.listing_id,
+    id: row.id, otherUsername, listingName: row.listing_name, listingId: row.listing_id,
     messages: row.messages || [], urgent: row.urgent, createdAt: row.created_at, updatedAt: row.updated_at,
   };
 }
-app.get('/api/messages', async (req, res) => {
+app.get('/api/messages', requireAuth, async (req, res) => {
   try {
-    const rows = await sb(supabase.from('message_threads').select('*').order('updated_at', { ascending: false }));
-    res.json(rows.map(threadOut));
+    const rows = await sb(supabase.from('message_threads').select('*')
+      .or(`participant_a.eq.${req.username},participant_b.eq.${req.username}`)
+      .order('updated_at', { ascending: false }));
+    res.json(rows.map(r => threadOut(r, req.username)));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
-app.post('/api/messages', async (req, res) => {
+app.post('/api/messages', requireAuth, async (req, res) => {
   try {
-    const { threadId, contactName, listingName, listingId, text, urgent } = req.body;
+    const { threadId, otherUsername, listingName, listingId, text, urgent } = req.body;
     if (!text || !text.trim()) return res.status(400).json({ error: 'Message text is required' });
 
     let existing = null;
     if (threadId) {
       const rows = await sb(supabase.from('message_threads').select('*').eq('id', threadId));
       existing = rows[0] || null;
+      if (existing && existing.participant_a !== req.username && existing.participant_b !== req.username) {
+        return res.status(403).json({ error: 'Not your conversation' });
+      }
     } else {
-      const rows = await sb(supabase.from('message_threads').select('*').eq('listing_id', listingId).eq('contact_name', contactName));
-      existing = rows[0] || null;
+      const other = (otherUsername || '').trim().toLowerCase();
+      if (!other) return res.status(400).json({ error: 'otherUsername is required' });
+      if (other === req.username) return res.status(400).json({ error: "You can't message yourself." });
+      // Simple, safe query: fetch MY threads for this listing, then match
+      // the exact pair in JS -- avoids fragile nested OR/AND filter syntax.
+      const rows = await sb(supabase.from('message_threads').select('*')
+        .eq('listing_id', listingId)
+        .or(`participant_a.eq.${req.username},participant_b.eq.${req.username}`));
+      existing = rows.find(r =>
+        (r.participant_a === req.username && r.participant_b === other) ||
+        (r.participant_a === other && r.participant_b === req.username)
+      ) || null;
     }
 
-    const newMessage = { from: 'me', text: text.trim(), ts: new Date().toISOString() };
+    const newMessage = { from: req.username, text: text.trim(), ts: new Date().toISOString() };
 
     if (existing) {
       const messages = [...(existing.messages || []), newMessage];
       const update = { messages, updated_at: new Date().toISOString() };
       if (urgent) update.urgent = true;
       const rows = await sb(supabase.from('message_threads').update(update).eq('id', existing.id).select());
-      res.json(threadOut(rows[0]));
+      res.json(threadOut(rows[0], req.username));
     } else {
+      const other = (otherUsername || '').trim().toLowerCase();
+      const existingUser = await sb(supabase.from('users').select('username').eq('username', other));
+      if (!existingUser[0]) return res.status(404).json({ error: 'User not found' });
       const row = {
-        id: newId('thread'), contact_name: contactName || 'Collector', listing_name: listingName || '',
-        listing_id: listingId || null, messages: [newMessage], urgent: !!urgent, updated_at: new Date().toISOString(),
+        id: newId('thread'), participant_a: req.username, participant_b: other,
+        listing_name: listingName || '', listing_id: listingId || null,
+        messages: [newMessage], urgent: !!urgent, updated_at: new Date().toISOString(),
       };
       const rows = await sb(supabase.from('message_threads').insert(row).select());
-      res.json(threadOut(rows[0]));
+      res.json(threadOut(rows[0], req.username));
     }
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
-app.post('/api/messages/:id/seen', async (req, res) => {
+app.post('/api/messages/:id/seen', requireAuth, async (req, res) => {
   try {
+    const existing = await sb(supabase.from('message_threads').select('*').eq('id', req.params.id));
+    if (!existing[0]) return res.status(404).json({ error: 'Thread not found' });
+    if (existing[0].participant_a !== req.username && existing[0].participant_b !== req.username) {
+      return res.status(403).json({ error: 'Not your conversation' });
+    }
     const rows = await sb(supabase.from('message_threads').update({ urgent: false }).eq('id', req.params.id).select());
-    if (!rows[0]) return res.status(404).json({ error: 'Thread not found' });
-    res.json(threadOut(rows[0]));
+    res.json(threadOut(rows[0], req.username));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
-app.delete('/api/messages/:id', async (req, res) => {
+app.delete('/api/messages/:id', requireAuth, async (req, res) => {
   try {
-    const existing = await sb(supabase.from('message_threads').select('id').eq('id', req.params.id));
+    const existing = await sb(supabase.from('message_threads').select('*').eq('id', req.params.id));
+    if (!existing[0]) return res.json({ deleted: false });
+    if (existing[0].participant_a !== req.username && existing[0].participant_b !== req.username) {
+      return res.status(403).json({ error: 'Not your conversation' });
+    }
     await sb(supabase.from('message_threads').delete().eq('id', req.params.id));
-    res.json({ deleted: existing.length > 0 });
+    res.json({ deleted: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -420,6 +461,48 @@ app.post('/api/reviews', requireAuth, async (req, res) => {
     };
     const rows = await sb(supabase.from('reviews').insert(row).select());
     res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+/* ---------------- reports & blocks ---------------- */
+app.post('/api/reports', requireAuth, async (req, res) => {
+  try {
+    const { reportedUsername, reason, details, listingId } = req.body;
+    const target = (reportedUsername || '').trim().toLowerCase();
+    if (!target) return res.status(400).json({ error: 'reportedUsername is required' });
+    if (!reason) return res.status(400).json({ error: 'A reason is required' });
+    const existingUser = await sb(supabase.from('users').select('username').eq('username', target));
+    if (!existingUser[0]) return res.status(404).json({ error: 'User not found' });
+    const row = {
+      id: newId('report'), reporter_username: req.username, reported_username: target,
+      reason, details: details || '', listing_id: listingId || null,
+    };
+    await sb(supabase.from('reports').insert(row));
+    res.json({ reported: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/blocks', requireAuth, async (req, res) => {
+  try {
+    const rows = await sb(supabase.from('blocks').select('blocked_username, created_at').eq('blocker_username', req.username));
+    res.json(rows.map(r => ({ username: r.blocked_username, since: r.created_at })));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+app.post('/api/blocks', requireAuth, async (req, res) => {
+  try {
+    const target = (req.body.username || '').trim().toLowerCase();
+    if (!target) return res.status(400).json({ error: 'username is required' });
+    if (target === req.username) return res.status(400).json({ error: "You can't block yourself." });
+    const existingUser = await sb(supabase.from('users').select('username').eq('username', target));
+    if (!existingUser[0]) return res.status(404).json({ error: 'User not found' });
+    await sb(supabase.from('blocks').upsert({ blocker_username: req.username, blocked_username: target }, { onConflict: 'blocker_username,blocked_username' }));
+    res.json({ blocked: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+app.delete('/api/blocks/:username', requireAuth, async (req, res) => {
+  try {
+    await sb(supabase.from('blocks').delete().eq('blocker_username', req.username).eq('blocked_username', req.params.username));
+    res.json({ blocked: false });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
