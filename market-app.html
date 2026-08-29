@@ -29,6 +29,19 @@
   }
   #app{max-width:460px;margin:0 auto;height:100vh;display:flex;flex-direction:column;position:relative;overflow:hidden;}
 
+  #auth-gate{
+    position:absolute; inset:0; z-index:500; display:flex; align-items:center; justify-content:center;
+    padding:32px 28px; background: radial-gradient(circle at 20% 0%, var(--bg2), transparent 55%),
+                radial-gradient(circle at 80% 100%, var(--bg1), transparent 55%), #F9FAFB;
+  }
+  .gate-content{width:100%; max-width:340px;}
+  .gate-wordmark{
+    font-family:'Poppins',sans-serif; font-weight:800; font-size:32px; letter-spacing:-0.5px; text-align:center;
+    background:linear-gradient(100deg, var(--grad3), var(--grad1) 60%, var(--grad2));
+    -webkit-background-clip:text; background-clip:text; color:transparent; margin-bottom:12px;
+  }
+  .gate-tagline{font-family:'Inter',sans-serif; font-size:12.5px; color:var(--ink-soft); text-align:center; line-height:1.5; margin-bottom:28px;}
+
   /* ---------- top bar ---------- */
   .topbar{padding:18px 20px 10px;flex-shrink:0;}
   .topbar-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
@@ -361,6 +374,14 @@
 </head>
 <body>
 <div id="app">
+
+  <div id="auth-gate">
+    <div class="gate-content">
+      <div class="gate-wordmark">Flipit</div>
+      <div class="gate-tagline">A sports card marketplace with zero seller fees — sign in or create a free account to continue.</div>
+      <div id="gate-form"></div>
+    </div>
+  </div>
 
   <div class="topbar">
     <div class="topbar-row">
@@ -1157,6 +1178,73 @@ async function submitNewListing(){
 let authToken = localStorage.getItem('slabmarket_token') || null;
 let currentUser = null;
 let accountFormMode = 'login'; // 'login' | 'register'
+let gateFormMode = 'login';
+
+function renderAuthGate(){
+  const el = document.getElementById('gate-form');
+  if(gateFormMode === 'register'){
+    el.innerHTML = `
+      <div id="gate-auth-error"></div>
+      <div class="form-field"><label>Username</label><input type="text" id="gate-username" placeholder="Pick a username"></div>
+      <div class="form-field"><label>Password</label><input type="password" id="gate-password" placeholder="At least 6 characters"></div>
+      <div class="form-field"><label>Email</label><input type="email" id="gate-email" placeholder="you@example.com"></div>
+      <button class="send-btn" onclick="submitGateRegister()">Create account</button>
+      <button class="auth-toggle-link" style="display:block;width:100%;text-align:center;margin-top:12px;" onclick="gateFormMode='login'; renderAuthGate();">Already have an account? Log in</button>
+    `;
+  } else {
+    el.innerHTML = `
+      <div id="gate-auth-error"></div>
+      <div class="form-field"><label>Username</label><input type="text" id="gate-username" placeholder="Your username"></div>
+      <div class="form-field"><label>Password</label><input type="password" id="gate-password" placeholder="Your password"></div>
+      <button class="send-btn" onclick="submitGateLogin()">Log in</button>
+      <button class="auth-toggle-link" style="display:block;width:100%;text-align:center;margin-top:12px;" onclick="gateFormMode='register'; renderAuthGate();">Need an account? Sign up</button>
+    `;
+  }
+}
+function showGateError(msg){
+  const el = document.getElementById('gate-auth-error');
+  if(el) el.innerHTML = `<div class="auth-error">${msg}</div>`;
+}
+async function submitGateLogin(){
+  const username = document.getElementById('gate-username').value.trim();
+  const password = document.getElementById('gate-password').value;
+  if(!username || !password){ showGateError('Enter your username and password.'); return; }
+  try{
+    const res = await fetch(`${PROXY_BASE}/api/auth/login`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json();
+    if(!res.ok){ showGateError(data.error || 'Login failed.'); return; }
+    authToken = data.token;
+    localStorage.setItem('slabmarket_token', authToken);
+    currentUser = data.user;
+    profile.displayName = currentUser.username;
+    profile.bio = currentUser.bio || '';
+    profile.photo = currentUser.photo || '';
+    await enterApp();
+  } catch(e){ showGateError("Couldn't reach the server — make sure it's running."); }
+}
+async function submitGateRegister(){
+  const username = document.getElementById('gate-username').value.trim();
+  const password = document.getElementById('gate-password').value;
+  const email = document.getElementById('gate-email').value.trim();
+  if(!username || !password){ showGateError('Username and password are required.'); return; }
+  try{
+    const res = await fetch(`${PROXY_BASE}/api/auth/register`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ username, password, email }),
+    });
+    const data = await res.json();
+    if(!res.ok){ showGateError(data.error || 'Could not create account.'); return; }
+    authToken = data.token;
+    localStorage.setItem('slabmarket_token', authToken);
+    currentUser = data.user;
+    profile.displayName = currentUser.username;
+    profile.bio = currentUser.bio || '';
+    profile.photo = currentUser.photo || '';
+    await enterApp();
+  } catch(e){ showGateError("Couldn't reach the server — make sure it's running."); }
+}
 let followers = [];
 let blockedUsers = [];
 
@@ -1517,13 +1605,14 @@ async function submitLogout(){
   } catch(e){ /* proceed to clear local state regardless */ }
   authToken = null;
   currentUser = null;
-  threads = []; followers = []; following = []; blockedUsers = [];
+  listings = []; threads = []; followers = []; following = []; blockedUsers = [];
   myReviewSummary = { average: null, count: 0, reviews: [] };
   localStorage.removeItem('slabmarket_token');
   accountFormMode = 'login';
-  await loadProfile(); // fall back to the anonymous device profile, not the just-logged-out account's data
-  renderAccountPanel();
-  renderProfile();
+  gateFormMode = 'login';
+  closeAccountPanel();
+  document.getElementById('auth-gate').style.display = 'flex';
+  renderAuthGate();
 }
 
 function openSellersPanel(){
@@ -1748,7 +1837,17 @@ async function reloadListings(){
 }
 
 async function init(){
-  await Promise.all([loadProfile(), loadListings(), loadCurrentUser()]);
+  await loadCurrentUser(); // silently checks any stored token
+  if(currentUser){
+    await enterApp();
+  } else {
+    document.getElementById('auth-gate').style.display = 'flex';
+    renderAuthGate();
+  }
+}
+async function enterApp(){
+  document.getElementById('auth-gate').style.display = 'none';
+  await loadListings();
   await Promise.all([loadMessages(), loadFollowStats(), loadReviewSummary(), loadBlockedUsers()]);
   renderMarketplaceFeed();
 }
