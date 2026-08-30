@@ -51,6 +51,12 @@
     box-shadow:var(--shadow); border:1px solid var(--line);
   }
   .gate-card .follow-tabs{ margin-bottom:20px; }
+  .terms-checkbox-row{
+    display:flex; align-items:flex-start; gap:8px; margin:2px 0 16px;
+    font-family:'Inter',sans-serif; font-size:11.5px; color:var(--ink-soft); line-height:1.4; cursor:pointer;
+  }
+  .terms-checkbox-row input[type="checkbox"]{ margin-top:2px; flex-shrink:0; width:15px; height:15px; accent-color:var(--violet); cursor:pointer; }
+  .terms-link{ background:none; border:none; padding:0; color:var(--violet); font-weight:600; font-size:11.5px; font-family:'Inter',sans-serif; cursor:pointer; text-decoration:underline; }
 
   /* ---------- top bar ---------- */
   .topbar{padding:18px 20px 10px;flex-shrink:0;}
@@ -609,6 +615,22 @@
     </div>
     <div class="form-field"><label>Details (optional)</label><textarea id="report-details-input" rows="3" placeholder="What happened?"></textarea></div>
     <button class="send-btn" style="background:linear-gradient(120deg, var(--pass), #8a2e2e);" onclick="submitReport()">Submit report</button>
+  </div>
+
+  <div class="sheet-backdrop" id="terms-backdrop" onclick="closeTermsSheet()" style="z-index:501;"></div>
+  <div class="sheet" id="terms-sheet" style="max-height:80vh; z-index:502;">
+    <div class="sheet-handle"></div>
+    <h3>Terms &amp; Conditions</h3>
+    <div class="sub">A summary of Flipit's Terms of Use and Privacy Policy.</div>
+    <div style="font-family:'Inter',sans-serif; font-size:12.5px; color:var(--ink-soft); line-height:1.6;">
+      <p><b style="color:var(--ink);">What Flipit is.</b> Flipit is a community platform for sports card collectors, combining social features (profiles, following, messaging, reviews) with tools for listing and browsing cards for sale. Members interact directly with each other — Flipit provides the space and tools, but is not a party to any listing, conversation, or sale.</p>
+      <p><b style="color:var(--ink);">Payments happen outside the app.</b> Flipit does not process, hold, or have access to any payment. "Buy It Now" takes you directly to the seller's own PayPal page, and you pay them directly. Flipit cannot verify a payment was made or received, and cannot issue refunds or resolve payment disputes. For your protection, use PayPal's "Goods & Services" option, not "Friends & Family."</p>
+      <p><b style="color:var(--ink);">No guarantees on listings.</b> Sellers are solely responsible for their listing's accuracy, including condition, authenticity, and the comp price provided. Flipit's rating system is a community trust signal, not a verification service.</p>
+      <p><b style="color:var(--ink);">What's public vs. private.</b> Your username, photo, bio, listings, ratings, and follower counts are visible to other members. Your email and shipping address are never shown to other users. Messages are only visible to you and the person you're messaging.</p>
+      <p><b style="color:var(--ink);">Account & data.</b> You can request account deletion at any time. Flipit is not intended for anyone under 18.</p>
+      <p style="margin-top:16px;"><i>This is a summary for quick reading. The full Privacy Policy & Terms of Use is available on request.</i></p>
+    </div>
+    <button class="send-btn" style="margin-top:16px;" onclick="closeTermsSheet()">Close</button>
   </div>
 
   <div class="sheet-backdrop" id="buynow-backdrop" onclick="closeBuyNowSheet()"></div>
@@ -1218,6 +1240,15 @@ let currentUser = null;
 let accountFormMode = 'login'; // 'login' | 'register'
 let gateFormMode = 'login';
 
+function openTermsSheet(){
+  document.getElementById('terms-backdrop').classList.add('open');
+  document.getElementById('terms-sheet').classList.add('open');
+}
+function closeTermsSheet(){
+  document.getElementById('terms-backdrop').classList.remove('open');
+  document.getElementById('terms-sheet').classList.remove('open');
+}
+
 function renderAuthGate(){
   document.getElementById('gate-tab-login').classList.toggle('active', gateFormMode === 'login');
   document.getElementById('gate-tab-register').classList.toggle('active', gateFormMode === 'register');
@@ -1228,6 +1259,10 @@ function renderAuthGate(){
       <div class="form-field"><label>Username</label><input type="text" id="gate-username" placeholder="Pick a username"></div>
       <div class="form-field"><label>Password</label><input type="password" id="gate-password" placeholder="At least 6 characters"></div>
       <div class="form-field"><label>Email</label><input type="email" id="gate-email" placeholder="you@example.com"></div>
+      <label class="terms-checkbox-row">
+        <input type="checkbox" id="gate-terms-accept">
+        <span>I accept the <button type="button" class="terms-link" onclick="openTermsSheet()">Terms &amp; Conditions</button></span>
+      </label>
       <button class="send-btn" onclick="submitGateRegister()">Create account</button>
     `;
   } else {
@@ -1267,6 +1302,7 @@ async function submitGateRegister(){
   const password = document.getElementById('gate-password').value;
   const email = document.getElementById('gate-email').value.trim();
   if(!username || !password){ showGateError('Username and password are required.'); return; }
+  if(!document.getElementById('gate-terms-accept').checked){ showGateError('You must accept the Terms & Conditions to create an account.'); return; }
   try{
     const res = await fetch(`${PROXY_BASE}/api/auth/register`, {
       method:'POST', headers:{'Content-Type':'application/json'},
