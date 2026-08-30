@@ -606,7 +606,14 @@ const PROXY_BASE = ''; // relative — automatically points wherever this page i
 /* ---------------- state ---------------- */
 let profile = { displayName: 'Collector' };
 let listings = [];
-let saved = [];
+let savedListingIds = [];
+async function loadSavedListings(){
+  if(!currentUser){ savedListingIds = []; return; }
+  try{
+    const res = await fetch(`${PROXY_BASE}/api/saved`, { headers: { 'Authorization': 'Bearer ' + authToken } });
+    savedListingIds = res.ok ? await res.json() : [];
+  } catch(e){ savedListingIds = []; }
+}
 let threads = [];
 let activeThreadId = null;
 let pendingNewPhotos = [];
@@ -770,7 +777,7 @@ function renderMarketplacePost(item){
   const rating = avgRating(item);
   const pctBelow = Math.round((1 - item.price / item.compPrice) * 100);
   const dealBadge = pctBelow > 0 ? `<div class="mp-deal-badge">${pctBelow}% below comp</div>` : '';
-  const isLiked = saved.some(s => s.id === item.id);
+  const isLiked = savedListingIds.includes(item.id);
   const isOwn = item.sellerName === (profile.displayName || 'Collector');
 
   const starsHtml = [1,2,3,4,5].map(n =>
@@ -846,25 +853,35 @@ function closeCompProofModal(){
 }
 
 /* ---------------- save / saved tab ---------------- */
-function toggleSaveListing(id){
+async function toggleSaveListing(id){
   const item = listings.find(l => l.id === id);
   if(!item) return;
-  const idx = saved.findIndex(s => s.id === id);
-  if(idx >= 0) saved.splice(idx, 1); else saved.unshift(item);
-  renderMarketplaceFeed();
-  renderSavedBadge();
+  const isSaved = savedListingIds.includes(id);
+  try{
+    if(isSaved){
+      await fetch(`${PROXY_BASE}/api/saved/${id}`, { method:'DELETE', headers:{'Authorization':'Bearer ' + authToken} });
+      savedListingIds = savedListingIds.filter(sid => sid !== id);
+    } else {
+      await fetch(`${PROXY_BASE}/api/saved`, { method:'POST', headers:{'Content-Type':'application/json', 'Authorization':'Bearer ' + authToken}, body: JSON.stringify({ listingId: id }) });
+      savedListingIds.push(id);
+    }
+    renderMarketplaceFeed();
+    renderSavedBadge();
+    if(document.getElementById('tab-saved').classList.contains('active')) renderSavedList();
+  } catch(e){ alert("Couldn't reach the server — make sure it's running."); }
 }
 function renderSavedBadge(){
   const b = document.getElementById('saved-badge');
-  b.style.display = saved.length ? 'inline-block' : 'none';
-  b.textContent = saved.length;
+  b.style.display = savedListingIds.length ? 'inline-block' : 'none';
+  b.textContent = savedListingIds.length;
 }
 function renderSavedList(){
   const c = document.getElementById('saved-view');
-  if(saved.length === 0){ c.innerHTML = `<div class="empty-saved">Nothing saved yet. Tap the heart on a listing in Marketplace to save it here.</div>`; return; }
-  c.innerHTML = saved.map(item => {
+  const savedItems = listings.filter(l => savedListingIds.includes(l.id));
+  if(savedItems.length === 0){ c.innerHTML = `<div class="empty-saved">Nothing saved yet. Tap the heart on a listing in Marketplace to save it here.</div>`; return; }
+  c.innerHTML = savedItems.map(item => {
     const photos = item.photos && item.photos.length ? item.photos : (item.photo ? [item.photo] : []);
-    return `<div class="saved-row" onclick="toggleSaveListing('${item.id}'); renderSavedList();">
+    return `<div class="saved-row" onclick="toggleSaveListing('${item.id}');">
       <div class="saved-thumb">${photos[0] ? `<img src="${photos[0]}">` : ''}</div>
       <div class="saved-meta"><div class="nm">${item.name}</div><div class="pr">$${Number(item.price).toFixed(2)} · @${item.sellerName}</div></div>
     </div>`;
@@ -1013,7 +1030,7 @@ function renderMyListingsGrid(myListings){
 }
 async function deleteListing(id){
   listings = listings.filter(l => l.id !== id);
-  saved = saved.filter(s => s.id !== id);
+  savedListingIds = savedListingIds.filter(sid => sid !== id);
   renderProfile();
   try{ await fetch(`${PROXY_BASE}/api/listings/${id}`, { method:'DELETE', headers:{'Authorization':'Bearer ' + authToken} }); } catch(e){}
 }
@@ -1605,7 +1622,7 @@ async function submitLogout(){
   } catch(e){ /* proceed to clear local state regardless */ }
   authToken = null;
   currentUser = null;
-  listings = []; threads = []; followers = []; following = []; blockedUsers = [];
+  listings = []; threads = []; followers = []; following = []; blockedUsers = []; savedListingIds = [];
   myReviewSummary = { average: null, count: 0, reviews: [] };
   localStorage.removeItem('slabmarket_token');
   accountFormMode = 'login';
@@ -1848,7 +1865,7 @@ async function init(){
 async function enterApp(){
   document.getElementById('auth-gate').style.display = 'none';
   await loadListings();
-  await Promise.all([loadMessages(), loadFollowStats(), loadReviewSummary(), loadBlockedUsers()]);
+  await Promise.all([loadMessages(), loadFollowStats(), loadReviewSummary(), loadBlockedUsers(), loadSavedListings()]);
   renderMarketplaceFeed();
 }
 init();

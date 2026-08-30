@@ -469,4 +469,26 @@ app.delete('/api/blocks/:username', requireAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+/* ---------------- saved listings ---------------- */
+app.get('/api/saved', requireAuth, async (req, res) => {
+  try {
+    const rows = await sb(supabase.from('saved_listings').select('listing_id').eq('owner_username', req.username));
+    res.json(rows.map(r => r.listing_id));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+app.post('/api/saved', requireAuth, async (req, res) => {
+  try {
+    const listingId = req.body.listingId;
+    if (!listingId) return res.status(400).json({ error: 'listingId is required' });
+    await sb(supabase.from('saved_listings').upsert({ owner_username: req.username, listing_id: listingId }, { onConflict: 'owner_username,listing_id' }));
+    res.json({ saved: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+app.delete('/api/saved/:listingId', requireAuth, async (req, res) => {
+  try {
+    await sb(supabase.from('saved_listings').delete().eq('owner_username', req.username).eq('listing_id', req.params.listingId));
+    res.json({ saved: false });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.listen(PORT, () => console.log(`Flipit server running on http://localhost:${PORT} (Supabase-backed)`));
