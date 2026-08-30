@@ -31,16 +31,26 @@
 
   #auth-gate{
     position:absolute; inset:0; z-index:500; display:flex; align-items:center; justify-content:center;
-    padding:32px 28px; background: radial-gradient(circle at 20% 0%, var(--bg2), transparent 55%),
+    padding:32px 24px; background: radial-gradient(circle at 20% 0%, var(--bg2), transparent 55%),
                 radial-gradient(circle at 80% 100%, var(--bg1), transparent 55%), #F9FAFB;
   }
-  .gate-content{width:100%; max-width:340px;}
+  .gate-content{width:100%; max-width:360px;}
   .gate-wordmark{
-    font-family:'Poppins',sans-serif; font-weight:800; font-size:32px; letter-spacing:-0.5px; text-align:center;
+    font-family:'Poppins',sans-serif; font-weight:800; font-size:34px; letter-spacing:-0.5px; text-align:center;
     background:linear-gradient(100deg, var(--grad3), var(--grad1) 60%, var(--grad2));
-    -webkit-background-clip:text; background-clip:text; color:transparent; margin-bottom:12px;
+    -webkit-background-clip:text; background-clip:text; color:transparent; margin-bottom:8px;
   }
-  .gate-tagline{font-family:'Inter',sans-serif; font-size:12.5px; color:var(--ink-soft); text-align:center; line-height:1.5; margin-bottom:28px;}
+  .gate-tagline{font-family:'Inter',sans-serif; font-size:13px; color:var(--ink-soft); text-align:center; line-height:1.5; margin-bottom:18px;}
+  .gate-features{display:flex; flex-wrap:wrap; justify-content:center; gap:8px; margin-bottom:26px;}
+  .gate-feature-pill{
+    font-family:'Inter',sans-serif; font-size:10.5px; font-weight:600; color:var(--violet);
+    background:var(--violet-soft); padding:6px 12px; border-radius:20px; white-space:nowrap;
+  }
+  .gate-card{
+    background:var(--surface); border-radius:22px; padding:24px 22px 22px;
+    box-shadow:var(--shadow); border:1px solid var(--line);
+  }
+  .gate-card .follow-tabs{ margin-bottom:20px; }
 
   /* ---------- top bar ---------- */
   .topbar{padding:18px 20px 10px;flex-shrink:0;}
@@ -378,8 +388,19 @@
   <div id="auth-gate">
     <div class="gate-content">
       <div class="gate-wordmark">Flipit</div>
-      <div class="gate-tagline">A sports card marketplace with zero seller fees — sign in or create a free account to continue.</div>
-      <div id="gate-form"></div>
+      <div class="gate-tagline">The sports card marketplace with zero seller fees.</div>
+      <div class="gate-features">
+        <span class="gate-feature-pill">No seller fees</span>
+        <span class="gate-feature-pill">Comp-verified deals</span>
+        <span class="gate-feature-pill">Real buyer & seller reviews</span>
+      </div>
+      <div class="gate-card">
+        <div class="follow-tabs">
+          <button class="follow-tab active" id="gate-tab-login" onclick="gateFormMode='login'; renderAuthGate();">Log In</button>
+          <button class="follow-tab" id="gate-tab-register" onclick="gateFormMode='register'; renderAuthGate();">Sign Up</button>
+        </div>
+        <div id="gate-form"></div>
+      </div>
     </div>
   </div>
 
@@ -1198,6 +1219,8 @@ let accountFormMode = 'login'; // 'login' | 'register'
 let gateFormMode = 'login';
 
 function renderAuthGate(){
+  document.getElementById('gate-tab-login').classList.toggle('active', gateFormMode === 'login');
+  document.getElementById('gate-tab-register').classList.toggle('active', gateFormMode === 'register');
   const el = document.getElementById('gate-form');
   if(gateFormMode === 'register'){
     el.innerHTML = `
@@ -1206,7 +1229,6 @@ function renderAuthGate(){
       <div class="form-field"><label>Password</label><input type="password" id="gate-password" placeholder="At least 6 characters"></div>
       <div class="form-field"><label>Email</label><input type="email" id="gate-email" placeholder="you@example.com"></div>
       <button class="send-btn" onclick="submitGateRegister()">Create account</button>
-      <button class="auth-toggle-link" style="display:block;width:100%;text-align:center;margin-top:12px;" onclick="gateFormMode='login'; renderAuthGate();">Already have an account? Log in</button>
     `;
   } else {
     el.innerHTML = `
@@ -1214,7 +1236,6 @@ function renderAuthGate(){
       <div class="form-field"><label>Username</label><input type="text" id="gate-username" placeholder="Your username"></div>
       <div class="form-field"><label>Password</label><input type="password" id="gate-password" placeholder="Your password"></div>
       <button class="send-btn" onclick="submitGateLogin()">Log in</button>
-      <button class="auth-toggle-link" style="display:block;width:100%;text-align:center;margin-top:12px;" onclick="gateFormMode='register'; renderAuthGate();">Need an account? Sign up</button>
     `;
   }
 }
